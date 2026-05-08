@@ -1,0 +1,96 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: stream-profiles-example
+  description: >
+    Demonstrates stream profile inheritance.
+    Precedence (highest -> lowest): member -> group -> profile.
+    A null value explicitly clears the inherited profile at that level.
+spec:
+  profiles:
+    default:
+      name: Default
+      # Profile-level default: every channel uses Proxy unless overridden.
+      streamProfile: Proxy
+      groups:
+
+        free_to_air:
+          name: Free to Air
+          # No streamProfile here -- inherits Proxy from the profile.
+          members:
+            - name: NBS One
+              # No streamProfile here -- inherits Proxy from the profile.
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| NBS ONE HD"
+                    - "DEMO| NBS One HD"
+
+            - name: Beacon
+              # No streamProfile here -- inherits Proxy from the profile.
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Beacon HD"
+
+        sports:
+          name: Sports
+          # Group-level override: all sport channels use Redirect instead of Proxy.
+          streamProfile: Redirect
+          members:
+            - name: Arena Sports Premier
+              # No streamProfile here -- inherits Redirect from the group.
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Arena Sports Premier HD"
+
+            - name: Titan Sport 1
+              # Member-level override: this one channel reverts to Proxy.
+              streamProfile: Proxy
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Titan Sport 1 HD"
+
+            - name: Arena Sports 2
+              # Member-level override with a third profile value.
+              streamProfile: Direct
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Arena Sports 2"
+
+        premium:
+          name: Premium
+          # null explicitly removes the stream profile for this group's channels,
+          # regardless of what the profile-level default is.
+          streamProfile: null
+          members:
+            - name: Crestwood Cinema
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Crestwood Cinema"
+
+            - name: Crestwood Drama
+              # Member-level value takes priority even when group is null.
+              streamProfile: Redirect
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Crestwood Drama HD"

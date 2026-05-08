@@ -1,0 +1,284 @@
+{
+  "type": "object",
+  "description": "Top-level Waybill channel manifest",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "const": "WaybillConfig",
+      "description": "Resource kind \u2014 must be 'WaybillConfig'"
+    },
+    "version": {
+      "type": "string",
+      "description": "API version, e.g. v1alpha1"
+    },
+    "metadata": {
+      "$ref": "#/$defs/ConfigMetadata",
+      "description": "Manifest name and description"
+    },
+    "spec": {
+      "$ref": "#/$defs/ConfigSpec",
+      "description": "Profile definitions"
+    }
+  },
+  "required": [
+    "kind",
+    "version",
+    "metadata"
+  ],
+  "additionalProperties": false,
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WaybillConfig",
+  "$defs": {
+    "ConfigMetadata": {
+      "type": "object",
+      "description": "Manifest metadata",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Manifest name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional human-readable description"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "ConfigSpec": {
+      "type": "object",
+      "description": "Specification containing named profile definitions",
+      "properties": {
+        "profiles": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ConfigProfile"
+          },
+          "description": "Map of profile key \u2192 ConfigProfile"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigProfile": {
+      "type": "object",
+      "description": "A named profile grouping channel groups, with an optional default stream profile",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable profile name"
+        },
+        "groups": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ConfigGroup"
+          },
+          "description": "Map of group key \u2192 ConfigGroup"
+        },
+        "streamProfile": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Default stream profile applied to every channel in this profile"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigGroup": {
+      "type": "object",
+      "description": "A channel group that maps to a Dispatcharr ChannelGroup",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable group name"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfigMember"
+          },
+          "description": "Ordered list of channel members"
+        },
+        "streamProfile": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Stream profile override for this group (overrides profile-level setting)"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "ConfigMember": {
+      "type": "object",
+      "description": "A channel member with sequential matcher and transformer rules",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Member (channel) name"
+        },
+        "matchers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfigMatcher"
+          },
+          "description": "Ordered matchers used to filter input streams"
+        },
+        "transformers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfigTransformer"
+          },
+          "description": "Ordered transformers applied to matched streams"
+        },
+        "streamProfile": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Stream profile override for this member's channels (overrides group- and profile-level settings)"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "ConfigMatcher": {
+      "type": "object",
+      "description": "A filter rule evaluated against each input stream; matchers run in order and can keep or drop streams",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "regex",
+            "hasPrefix",
+            "containsAny",
+            "exactMatch"
+          ],
+          "description": "Matching algorithm"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "keep",
+            "drop"
+          ],
+          "description": "Whether matched streams are kept or dropped"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern to test against the target field (type: regex)"
+        },
+        "prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "One or more prefixes; the stream matches if its field starts with any of them (type: hasPrefix)"
+        },
+        "substrings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "One or more substrings; the stream matches if its field contains any of them (type: containsAny)"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Exact values; the stream matches if its field equals any of them (type: exactMatch)"
+        },
+        "caseSensitive": {
+          "type": "boolean",
+          "description": "Whether string comparison is case-sensitive"
+        },
+        "transformers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfigTransformer"
+          },
+          "description": "Transformers applied to the field value before this matcher evaluates; useful for canonicalising the value before matching"
+        },
+        "field": {
+          "type": "string",
+          "description": "Stream field to evaluate against (e.g. 'name', 'tvg_id')"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "ConfigTransformer": {
+      "type": "object",
+      "description": "A mutation rule applied to a stream field value; transformers run in order after all matchers pass",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "convertCardinalNumbers",
+            "regex",
+            "strip",
+            "set"
+          ],
+          "description": "Transformation algorithm"
+        },
+        "action": {
+          "type": "string",
+          "description": "Sub-action for the transformer (e.g. 'replace')"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "both"
+          ],
+          "description": "Cardinal number conversion direction (type: convertCardinalNumbers)"
+        },
+        "outputType": {
+          "type": "string",
+          "enum": [
+            "number",
+            "word"
+          ],
+          "description": "Target format for cardinal numbers \u2014 'number' (e.g. 1) or 'word' (e.g. ONE) (type: convertCardinalNumbers)"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern to match (type: regex)"
+        },
+        "replacement": {
+          "type": "string",
+          "description": "Replacement string; supports $1-style back-references (type: regex)"
+        },
+        "prefix": {
+          "type": "string",
+          "description": "Prefix to add or strip"
+        },
+        "suffix": {
+          "type": "string",
+          "description": "Suffix to add or strip"
+        },
+        "value": {
+          "type": "string",
+          "description": "Static value to assign to the field (type: set)"
+        },
+        "field": {
+          "type": "string",
+          "description": "Stream field to transform (e.g. 'name', 'tvg_id')"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

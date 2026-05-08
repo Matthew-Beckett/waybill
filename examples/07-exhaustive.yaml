@@ -1,0 +1,394 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: exhaustive-example
+  description: >
+    Single manifest that exercises every schema feature:
+    all four matcher types, all four transformer types, pre-transformers inside
+    matchers, keep and drop actions, caseSensitive control, field targeting
+    beyond "name", stream profiles at profile / group / member level,
+    multiple profiles, multiple groups, null stream profile, and multi-step
+    transformation pipelines.
+
+spec:
+  profiles:
+
+    # Profile 1 -- Standard (HD-preferred)
+    # Default stream profile: Proxy.
+    # Overridden at group level for sports, and at member level for one channel.
+    standard:
+      name: Standard
+      streamProfile: Proxy        # profile-level default
+      groups:
+
+        nbs:
+          name: NBS
+          # Inherits Proxy from the profile.
+          members:
+
+            - name: NBS 1-4
+              # Uses regex + hasPrefix matchers, pre-transformers inside a matcher,
+              # and a three-step transformation pipeline.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  # Broad first pass -- keep anything that looks like NBS 1-4
+                  # (handles both digit and word forms).
+                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
+
+                - type: hasPrefix
+                  field: name
+                  action: drop
+                  # Exclude a specific low-quality re-stream prefix.
+                  prefixes:
+                    - "DEMO-NBSI|"
+
+                - type: regex
+                  field: name
+                  action: keep
+                  # Narrow pass after pre-transformer converts words to digits.
+                  pattern: "^DEMO\\| NBS [1-4](?:\\s+(?:HD|HEVC)|\\s*/.*)?$"
+                  transformers:
+                    - type: convertCardinalNumbers
+                      field: name
+                      direction: both
+                      outputType: number
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+                - type: convertCardinalNumbers
+                  field: name
+                  direction: both
+                  outputType: number
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
+                  replacement: "$1"
+
+            - name: NBS News
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "NBS NEWS"
+                    - "NBS News"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  # Exclude NBS News SD duplicates.
+                  substrings:
+                    - "SD"
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "DEMO| "
+                - type: set
+                  field: name
+                  value: "NBS News"
+
+            - name: NBS Four
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  values:
+                    - "demo| nbs four hd"
+                    - "demo| nbs four"
+                    - "demo| nbs 4 hd"
+                    - "demo| nbs 4"
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS 4"
+
+        apex:
+          name: Apex TV
+          # Inherits Proxy from the profile.
+          members:
+
+            - name: Apex TV family
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Apex TV"
+                - type: hasPrefix
+                  field: name
+                  action: drop
+                  prefixes:
+                    - "DEMO| Apex Plus"    # handled in a separate member
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: ".*\\bSD\\b.*"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+HD$"
+                  replacement: ""
+
+            - name: Apex Plus
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "ApexPlus"
+                    - "Apex Plus"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Apex Plus"
+                - type: set
+                  field: tvg_id
+                  value: "apexplus.demo"
+
+        beacon:
+          name: Beacon
+          members:
+
+            - name: Beacon family
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  # Pre-transformer strips "DEMO| " so values list stays clean.
+                  values:
+                    - "Beacon"
+                    - "Beacon HD"
+                    - "Beacon 2"
+                    - "Beacon 2 HD"
+                    - "Beacon Xtra"
+                    - "Beacon Xtra HD"
+                    - "Beacon Films"
+                    - "Beacon Films HD"
+                  transformers:
+                    - type: regex
+                      field: name
+                      action: replace
+                      pattern: "^DEMO\\| "
+                      replacement: ""
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+HD$"
+                  replacement: ""
+
+        sports:
+          name: Sports
+          streamProfile: Redirect    # group-level override -- sports use Redirect
+          members:
+
+            - name: Arena Sports
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  # Pre-transformer strips country prefix before prefix matching.
+                  prefixes:
+                    - "Arena Sports"
+                  transformers:
+                    - type: strip
+                      field: name
+                      prefix: "DEMO| "
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: ".*\\bSD\\b.*"    # exclude SD variants
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "DEMO| "
+
+            - name: Titan Sport
+              # Member-level override -- Titan uses a different profile from the group.
+              streamProfile: Proxy
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^DEMO\\| Titan Sport [1-4](?: HD)?$"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+HD$"
+                  replacement: ""
+
+            - name: Velocity Sport
+              # Matching on tvg_id rather than name.
+              matchers:
+                - type: regex
+                  field: tvg_id
+                  action: keep
+                  pattern: "^velocitysport[12]\\.demo$"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+
+        news:
+          name: News
+          # Group stream profile explicitly cleared -- news channels have no default.
+          streamProfile: null
+          members:
+
+            - name: Orbit News
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  values:
+                    - "demo| orbit news hd"
+                    - "demo| orbit news"
+                    - "demo| orbitnews hd"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Orbit News"
+
+            - name: Globe News
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  substrings:
+                    - "globe news"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Globe News"
+
+            - name: Meridian World
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Meridian World"
+                    - "Meridian-World"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - "Lite"
+                    - "Extra"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Meridian World"
+                - type: set
+                  field: tvg_id
+                  value: "meridianworld.demo"
+
+    # Profile 2 -- Kids
+    # No profile-level stream profile; each group defines its own.
+    kids:
+      name: Kids
+      groups:
+
+        nbs_kids:
+          name: NBS Children's
+          streamProfile: Proxy
+          members:
+            - name: Sprout
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  values:
+                    - "demo| sprout hd"
+                    - "demo| sprout"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Sprout"
+
+            - name: Juniper
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  substrings:
+                    - "juniper"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - "SD"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Juniper"
+
+        cartoon_channels:
+          name: Cartoon Channels
+          streamProfile: Redirect
+          members:
+            - name: Pixel Network
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Pixel Network"
+                    - "Pixel Retro"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+
+            - name: Relay family
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Relay"
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: ".*\\bSD\\b.*"
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "DEMO| "
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+HD$"
+                  replacement: ""

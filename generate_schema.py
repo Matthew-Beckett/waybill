@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""
+Generate a JSON Schema for the WaybillConfig YAML configuration format.
+
+Introspects the dataclass definitions in src/types/config.py and writes
+schema/config.schema.json, which IDE YAML extensions can reference for
+validation and autocomplete.
+
+Usage (from repo root):
+    python generate_schema.py
+
+VS Code — add to .vscode/settings.json:
+    "yaml.schemas": {
+        "./schema/config.schema.json": ["config.yaml", "config.*.yaml"]
+    }
+"""
+from __future__ import annotations
+
+import dataclasses
+import json
+import sys
+import types as _types
+import typing
+from enum import Enum
+from pathlib import Path
+from typing import Any, Union, get_args, get_origin
+
+# Ensure the repo root is on sys.path so src/ is importable without installing.
+sys.path.insert(0, str(Path(__file__).parent))
+
+from src.types.config import (
+    ConfigGroup,
+    ConfigMatcher,
+    ConfigMember,
+    ConfigMetadata,
+    ConfigProfile,
+    ConfigSpec,
+    ConfigTransformer,
+    WaybillConfig,
+)
+
+# Python snake_case field names that map to camelCase YAML keys.
+YAML_KEY: dict[tuple[type, str], str] = {
+    (ConfigMatcher, "case_sensitive"): "caseSensitive",
+    (ConfigTransformer, "output_type"): "outputType",
+    (ConfigProfile, "stream_profile"): "streamProfile",
+    (ConfigGroup, "stream_profile"): "streamProfile",
+    (ConfigMember, "stream_profile"): "streamProfile",
+}
+
+# Fields entirely omitted from the schema (internal implementation details).
+OMIT_FIELDS: frozenset[tuple[type, str]] = frozenset(
+    {
+        # 'extra' is a catch-all for unknown transformer keys; represented via
+        # additionalProperties on ConfigTransformer instead.
+        (ConfigTransformer, "extra"),
+    }
+)
+
+# Classes that forward unknown YAML keys into their 'extra' dict.
+ALLOW_ADDITIONAL_PROPS: frozenset[type] = frozenset({ConfigTransformer})
+
+# Hard-coded const values for specific fields.
+CONST_OVERRIDES: dict[tuple[type, str], str] = {
+    (WaybillConfig, "kind"): "WaybillConfig",
+}
+
+CLASS_DESCRIPTIONS: dict[type, str] = {
+    WaybillConfig: "Top-level Waybill channel manifest",
+    ConfigMetadata: "Manifest metadata",
+    ConfigSpec: "Specification containing named profile definitions",
+    ConfigProfile: (
+        "A named profile grouping channel groups, with an optional default stream profile"
+    ),
+    ConfigGroup: "A channel group that maps to a Dispatcharr ChannelGroup",
+    ConfigMember: "A channel member with sequential matcher and transformer rules",
+    ConfigMatcher: (
+        "A filter rule evaluated against each input stream; "
+        "matchers run in order and can keep or drop streams"
+    ),
+    ConfigTransformer: (
+        "A mutation rule applied to a stream field value; "
+        "transformers run in order after all matchers pass"
+    ),
+}
+
+FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
+    (WaybillConfig, "kind"): "Resource kind — must be 'WaybillConfig'",
+    (WaybillConfig, "version"): "API version, e.g. v1alpha1",
+    (WaybillConfig, "metadata"): "Manifest name and description",
+    (WaybillConfig, "spec"): "Profile definitions",
+    (ConfigMetadata, "name"): "Manifest name",
+    (ConfigMetadata, "description"): "Optional human-readable description",
+    (ConfigSpec, "profiles"): "Map of profile key → ConfigProfile",
+    (ConfigProfile, "name"): "Human-readable profile name",
+    (ConfigProfile, "stream_profile"): (
+        "Default stream profile applied to every channel in this profile"
+    ),
+    (ConfigProfile, "groups"): "Map of group key → ConfigGroup",
+    (ConfigGroup, "name"): "Human-readable group name",
+    (ConfigGroup, "stream_profile"): (
+        "Stream profile override for this group (overrides profile-level setting)"
+    ),
+    (ConfigGroup, "members"): "Ordered list of channel members",
+    (ConfigMember, "name"): "Member (channel) name",
+    (ConfigMember, "stream_profile"): (
+        "Stream profile override for this member's channels "
+        "(overrides group- and profile-level settings)"
+    ),
+    (ConfigMember, "matchers"): "Ordered matchers used to filter input streams",
+    (ConfigMember, "transformers"): "Ordered transformers applied to matched streams",
+    (ConfigMatcher, "type"): "Matching algorithm",
+    (ConfigMatcher, "action"): "Whether matched streams are kept or dropped",
+    (ConfigMatcher, "pattern"): "Regex pattern to test against the target field (type: regex)",
+    (ConfigMatcher, "prefixes"): (
+        "One or more prefixes; the stream matches if its field starts with any of them "
+        "(type: hasPrefix)"
+    ),
+    (ConfigMatcher, "substrings"): (
+        "One or more substrings; the stream matches if its field contains any of them "
+        "(type: containsAny)"
+    ),
+    (ConfigMatcher, "values"): (
+        "Exact values; the stream matches if its field equals any of them "
+        "(type: exactMatch)"
+    ),
+    (ConfigMatcher, "case_sensitive"): "Whether string comparison is case-sensitive",
+    (ConfigMatcher, "field"): "Stream field to evaluate against (e.g. 'name', 'tvg_id')",
+    (ConfigMatcher, "transformers"): (
+        "Transformers applied to the field value before this matcher evaluates; "
+        "useful for canonicalising the value before matching"
+    ),
+    (ConfigTransformer, "type"): "Transformation algorithm",
+    (ConfigTransformer, "action"): "Sub-action for the transformer (e.g. 'replace')",
+    (ConfigTransformer, "direction"): (
+        "Cardinal number conversion direction (type: convertCardinalNumbers)"
+    ),
+    (ConfigTransformer, "output_type"): (
+        "Target format for cardinal numbers — 'number' (e.g. 1) or 'word' (e.g. ONE) "
+        "(type: convertCardinalNumbers)"
+    ),
+    (ConfigTransformer, "pattern"): "Regex pattern to match (type: regex)",
+    (ConfigTransformer, "replacement"): (
+        "Replacement string; supports $1-style back-references (type: regex)"
+    ),
+    (ConfigTransformer, "prefix"): "Prefix to add or strip",
+    (ConfigTransformer, "suffix"): "Suffix to add or strip",
+    (ConfigTransformer, "value"): "Static value to assign to the field (type: set)",
+    (ConfigTransformer, "field"): "Stream field to transform (e.g. 'name', 'tvg_id')",
+}
+
+EXPORT_CLASSES: list[type] = [
+    WaybillConfig,
+    ConfigMetadata,
+    ConfigSpec,
+    ConfigProfile,
+    ConfigGroup,
+    ConfigMember,
+    ConfigMatcher,
+    ConfigTransformer,
+]
+
+
+_UNION_ORIGINS = {Union}
+if hasattr(_types, "UnionType"):
+    _UNION_ORIGINS.add(_types.UnionType)  # type: ignore[attr-defined]
+
+
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
+    return [e.value for e in enum_cls]
+
+
+def _py_type_to_schema(py_type: Any) -> dict[str, Any]:
+    """Recursively convert a Python type annotation to a JSON Schema fragment."""
+    origin = get_origin(py_type)
+    args = get_args(py_type)
+
+    # Union / X | Y  (handles Optional[X] = Union[X, None])
+    if origin in _UNION_ORIGINS:
+        non_none = [a for a in args if a is not type(None)]
+        has_none = len(non_none) < len(args)
+
+        if len(non_none) == 1:
+            inner = _py_type_to_schema(non_none[0])
+            if has_none:
+                return {"type": [inner["type"], "null"]} if "type" in inner else {"oneOf": [inner, {"type": "null"}]}
+            return inner
+
+        # Multiple non-None types — e.g. CardinalDirection | str
+        enum_types = [a for a in non_none if isinstance(a, type) and issubclass(a, Enum)]
+        str_types = [a for a in non_none if a is str]
+        if enum_types and str_types:
+            # Represent as enum; the str branch is the unset/empty fallback.
+            values: list[str] = []
+            for et in enum_types:
+                values.extend(_enum_values(et))
+            return {"type": "string", "enum": values}
+
+        return {"oneOf": [_py_type_to_schema(a) for a in non_none]}
+
+    # list[X]
+    if origin is list:
+        item_type = args[0] if args else Any
+        return {"type": "array", "items": _py_type_to_schema(item_type)}
+
+    # dict[str, X]
+    if origin is dict:
+        val_type = args[1] if len(args) > 1 else Any
+        if val_type is Any:
+            return {"type": "object"}
+        return {"type": "object", "additionalProperties": _py_type_to_schema(val_type)}
+
+    # Enum
+    if isinstance(py_type, type) and issubclass(py_type, Enum):
+        return {"type": "string", "enum": _enum_values(py_type)}
+
+    # Nested dataclass → $ref
+    if isinstance(py_type, type) and dataclasses.is_dataclass(py_type):
+        return {"$ref": f"#/$defs/{py_type.__name__}"}
+
+    # Primitives
+    if py_type is str:
+        return {"type": "string"}
+    if py_type is int:
+        return {"type": "integer"}
+    if py_type is float:
+        return {"type": "number"}
+    if py_type is bool:
+        return {"type": "boolean"}
+
+    # Any / object / unknown → unconstrained
+    return {}
+
+
+def _has_default(f: dataclasses.Field) -> bool:  # type: ignore[type-arg]
+    return (
+        f.default is not dataclasses.MISSING
+        or f.default_factory is not dataclasses.MISSING  # type: ignore[misc]
+    )
+
+def _dataclass_to_schema(cls: type) -> dict[str, Any]:
+    hints = typing.get_type_hints(cls)
+    fields = dataclasses.fields(cls)  # type: ignore[arg-type]
+
+    properties: dict[str, Any] = {}
+    required: list[str] = []
+
+    for f in fields:
+        if (cls, f.name) in OMIT_FIELDS:
+            continue
+
+        yaml_key = YAML_KEY.get((cls, f.name), f.name)
+        py_type = hints.get(f.name, Any)
+
+        if (cls, f.name) in CONST_OVERRIDES:
+            prop: dict[str, Any] = {
+                "type": "string",
+                "const": CONST_OVERRIDES[(cls, f.name)],
+            }
+        else:
+            prop = _py_type_to_schema(py_type)
+
+        if (cls, f.name) in FIELD_DESCRIPTIONS:
+            prop["description"] = FIELD_DESCRIPTIONS[(cls, f.name)]
+
+        properties[yaml_key] = prop
+
+        if not _has_default(f):
+            required.append(yaml_key)
+
+    schema: dict[str, Any] = {"type": "object"}
+
+    if cls in CLASS_DESCRIPTIONS:
+        schema["description"] = CLASS_DESCRIPTIONS[cls]
+
+    schema["properties"] = properties
+
+    if required:
+        schema["required"] = required
+
+    schema["additionalProperties"] = cls in ALLOW_ADDITIONAL_PROPS
+
+    return schema
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+def build_schema() -> dict[str, Any]:
+    defs = {cls.__name__: _dataclass_to_schema(cls) for cls in EXPORT_CLASSES}
+
+    # Promote the root class to the top level and attach $defs.
+    root = defs.pop("WaybillConfig")
+    root["$schema"] = "http://json-schema.org/draft-07/schema#"
+    root["title"] = "WaybillConfig"
+    root["$defs"] = defs
+
+    return root
+
+
+def main() -> None:
+    schema = build_schema()
+    output = Path("schema/config.schema.json")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(schema, indent=2) + "\n")
+    print(f"Written: {output}")
+
+
+if __name__ == "__main__":
+    main()

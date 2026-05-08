@@ -1,0 +1,232 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: transformers-example
+  description: >
+    Demonstrates all four transformer types (regex, convertCardinalNumbers, strip, set)
+    with every supported option, including multi-step transformation pipelines and
+    transformers targeting non-default stream fields.
+spec:
+  profiles:
+    default:
+      name: Default
+      groups:
+
+        regex_transformers:
+          name: Regex Transformers
+          members:
+
+            - name: Strip country prefix (regex replace)
+              # Replaces the matched portion with the replacement string.
+              # Back-references ($1, $2 ...) in replacement refer to capture groups.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Vista One"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+
+            - name: Extract channel name from complex string (regex capture group)
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: ".*\\bNBS\\s+[1-4]\\b.*"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
+                  replacement: "$1"
+
+            - name: Normalise whitespace (regex replace with back-reference)
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Beacon"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s{2,}"
+                  replacement: " "
+
+            - name: Transform tvg_id field (regex on non-name field)
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| NBS"
+              transformers:
+                - type: regex
+                  field: tvg_id
+                  action: replace
+                  pattern: "^(nbs1|nbs2|nbs3|nbs4)\\.demo$"
+                  replacement: "nbs-$1"
+
+        cardinal_transformers:
+          name: Cardinal Number Transformers
+          members:
+
+            - name: Words to digits (outputType number)
+              # Converts cardinal words to digits: "ONE" -> "1", "FOUR" -> "4", etc.
+              # direction: both converts in both directions before settling on outputType.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
+              transformers:
+                - type: convertCardinalNumbers
+                  field: name
+                  direction: both
+                  outputType: number
+
+            - name: Digits to words (outputType word)
+              # Converts digits to uppercase words: "4" -> "FOUR", "1" -> "ONE", etc.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: ".*Beacon [1-9].*"
+              transformers:
+                - type: convertCardinalNumbers
+                  field: name
+                  direction: both
+                  outputType: word
+
+            - name: Cardinal conversion chained with regex (multi-step)
+              # Demonstrates chaining: regex first strips the prefix, then
+              # convertCardinalNumbers normalises the number, then regex extracts
+              # the canonical form.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+                - type: convertCardinalNumbers
+                  field: name
+                  direction: both
+                  outputType: number
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
+                  replacement: "$1"
+
+        strip_transformers:
+          name: Strip Transformers
+          members:
+
+            - name: Strip prefix only
+              # Removes the prefix from the field value if it is present.
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Orbit News"
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "DEMO| "
+
+            - name: Strip suffix only
+              # Removes the suffix from the field value if it is present.
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "NBS"
+              transformers:
+                - type: strip
+                  field: name
+                  suffix: " HD"
+
+            - name: Strip both prefix and suffix
+              # Both prefix and suffix are stripped in a single transformer.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^DEMO\\|.*\\bVista\\b.*FHD$"
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "DEMO| "
+                  suffix: " FHD"
+
+            - name: Strip on non-name field
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Velocity Sport"
+              transformers:
+                - type: strip
+                  field: tvg_id
+                  prefix: "demo-"
+
+        set_transformers:
+          name: Set Transformers
+          members:
+
+            - name: Assign canonical name (set field to static value)
+              # Regardless of how many variant streams match, they all get the same
+              # canonical name after this transformer runs.
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Crestwood One"
+                    - "DEMO| Crestwood One HD"
+                    - "DEMO| CrestwoodOne"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Crestwood One"
+
+            - name: Set tvg_id to a known value (set on non-name field)
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Meridian World"
+              transformers:
+                - type: set
+                  field: tvg_id
+                  value: "meridianworld.demo"
+
+            - name: Set after matching then override specific attribute
+              # Matches broadly, then normalises the name and stamps a fixed tvg_id.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: ".*\\bGlobe Report\\b.*"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Globe Report"
+                - type: set
+                  field: tvg_id
+                  value: "globereport.demo"

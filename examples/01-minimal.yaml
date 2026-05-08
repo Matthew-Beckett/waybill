@@ -1,0 +1,5 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: minimal-example
+  description: The absolute minimum valid WaybillConfig — only the three required top-level fields

@@ -1,0 +1,156 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: pre-transformers-example
+  description: >
+    Demonstrates transformers scoped inside a matcher (pre-transformers).
+    Pre-transformers mutate the field value before the matcher evaluates it,
+    allowing canonicalisation of noisy stream names without affecting the
+    final output -- the member-level transformers handle the actual mutation.
+spec:
+  profiles:
+    default:
+      name: Default
+      groups:
+
+        channels:
+          name: Channels
+          members:
+
+            - name: NBS 1-4 (convert cardinal words before regex matching)
+              # Problem: streams arrive as both "NBS ONE HD" and "NBS 1 HD".
+              # The pre-transformer converts either form to digits so a single
+              # pattern can match them all.  The member-level transformers then
+              # produce the final canonical name.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  # Broad first pass -- keep anything that looks like NBS 1-4.
+                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
+
+                - type: regex
+                  field: name
+                  action: keep
+                  # Narrow second pass -- after the pre-transformer converts words
+                  # to digits, this pattern can match both variants uniformly.
+                  pattern: "^DEMO\\| NBS [1-4](?:\\s+(?:HD|HEVC)|\\s*/.*)?$"
+                  transformers:
+                    - type: convertCardinalNumbers
+                      field: name
+                      direction: both
+                      outputType: number
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+                - type: convertCardinalNumbers
+                  field: name
+                  direction: both
+                  outputType: number
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
+                  replacement: "$1"
+
+            - name: Arena Sports (strip country prefix before prefix matching)
+              # Streams are named "DEMO| Arena Sports Premier HD".
+              # The pre-transformer strips "DEMO| " so that the hasPrefix matcher
+              # can be written without the country tag.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "Arena Sports"
+                  transformers:
+                    - type: strip
+                      field: name
+                      prefix: "DEMO| "
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "DEMO| "
+
+            - name: Apex TV (regex strip before containsAny substring matching)
+              # The pre-transformer removes the country prefix so the substrings
+              # can target the channel name directly.
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Apex TV"
+                    - "Apex Plus"
+                  transformers:
+                    - type: regex
+                      field: name
+                      action: replace
+                      pattern: "^DEMO\\| "
+                      replacement: ""
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+
+            - name: Beacon family (regex normalise before exactMatch)
+              # exactMatch is strict; the pre-transformer strips the country tag
+              # so the values list does not need to enumerate every regional variant.
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  values:
+                    - "Beacon"
+                    - "Beacon HD"
+                    - "Beacon 2"
+                    - "Beacon 2 HD"
+                    - "Beacon Xtra"
+                    - "Beacon Films"
+                  transformers:
+                    - type: regex
+                      field: name
+                      action: replace
+                      pattern: "^DEMO\\| "
+                      replacement: ""
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+
+            - name: Multi-transformer pre-transform (cardinal then regex)
+              # Multiple pre-transformers run in order before the matcher evaluates.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "NBS"
+                  transformers:
+                    - type: regex
+                      field: name
+                      action: replace
+                      pattern: "^DEMO\\| "
+                      replacement: ""
+                    - type: convertCardinalNumbers
+                      field: name
+                      direction: both
+                      outputType: number
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+                - type: convertCardinalNumbers
+                  field: name
+                  direction: both
+                  outputType: number

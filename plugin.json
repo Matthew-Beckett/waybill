@@ -1,0 +1,38 @@
+{
+  "name": "waybill",
+  "version": "1.1.0",
+  "description": "A Dispatcharr plugin for managing channel configurations using Waybill manifests",
+  "author": "@Matthew-Beckett",
+  "help_url": "https://github.com/Matthew-Beckett/waybill",
+  "fields": [
+    { "id": "manifest", "label": "Waybill Channel Manifest YAML", "type": "text", "default": "" },
+    {
+      "id": "apply_mode",
+      "label": "Apply Mode",
+      "type": "select",
+      "default": "upsert",
+      "options": [
+        { "label": "Upsert (add/update only)", "value": "upsert" },
+        { "label": "Overwrite (delete channels not in manifest)", "value": "overwrite" }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "plan",
+      "label": "Plan Manifest",
+      "description": "Preview the desired channel state without making any changes",
+      "button_label": "Plan",
+      "button_variant": "outline",
+      "button_color": "blue"
+    },
+    {
+      "id": "apply",
+      "label": "Apply Manifest",
+      "description": "Apply the provided manifest to Dispatcharr",
+      "button_label": "Apply",
+      "button_variant": "filled",
+      "button_color": "blue"
+    }
+  ]
+}

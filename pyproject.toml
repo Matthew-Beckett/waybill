@@ -1,0 +1,28 @@
+[project]
+name = "waybill"
+version = "1.1.1"
+description = "A Dispatcharr plugin for managing channel configurations using Waybill manifests"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    # Provided by the Dispatcharr host environment; never vendored.
+    "dispatcharr",
+]
+
+[build-system]
+# Local PEP 517 backend — produces the plugin ZIP via `uv build --wheel`.
+requires = []
+build-backend = "_build_backend"
+backend-path = ["."]
+
+[dependency-groups]
+# Packages vendored into src/vendor/ at build time for use inside the plugin ZIP.
+bundle = [
+    "dacite>=1.9.2",
+    "num2words>=0.5.13",
+    "pyyaml>=6.0",
+    "word2number>=1.1",
+]
+
+[tool.uv.sources]
+dispatcharr = { path = "../Dispatcharr" }

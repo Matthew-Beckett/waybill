@@ -1,0 +1,222 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: multiple-profiles-example
+  description: >
+    Demonstrates multiple profiles in a single manifest.
+    Profiles are independent; each can have its own groups, members, and
+    stream-profile defaults.  Common use-cases include device-type splits
+    (HD vs SD), user-tier splits, or regional variants.
+spec:
+  profiles:
+
+    hd_only:
+      name: HD Only
+      streamProfile: Proxy
+      groups:
+        news:
+          name: News
+          members:
+            - name: NBS News HD
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| NBS NEWS HD"
+            - name: Orbit News HD
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| ORBIT NEWS HD"
+                    - "DEMO| Orbit News HD"
+
+        sport:
+          name: Sport
+          streamProfile: Redirect
+          members:
+            - name: Arena Sports HD
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^DEMO\\| Arena Sports.* HD$"
+            - name: Titan Sport HD
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^DEMO\\| Titan Sport [1-4] HD$"
+
+        entertainment:
+          name: Entertainment
+          members:
+            - name: Apex TV HD
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Apex TV HD"
+                    - "DEMO| Apex 2 HD"
+            - name: Beacon HD
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Beacon HD"
+                    - "DEMO| Beacon 2 HD"
+
+    sd_fallback:
+      name: SD Fallback
+      streamProfile: Redirect
+      groups:
+        news:
+          name: News
+          members:
+            - name: NBS News
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "NBS NEWS"
+                    - "NBS News"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - " HD"
+            - name: Orbit News
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "ORBIT NEWS"
+                    - "Orbit News"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - " HD"
+
+        sport:
+          name: Sport
+          members:
+            - name: Arena Sports SD
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Arena Sports"
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: ".* HD$"
+
+        entertainment:
+          name: Entertainment
+          members:
+            - name: Apex TV SD
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Apex TV"
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: ".* HD$"
+
+    kids:
+      name: Kids
+      # No default stream profile -- each group sets its own.
+      groups:
+        childrens_nbs:
+          name: Children's NBS
+          streamProfile: Proxy
+          members:
+            - name: Sprout
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  values:
+                    - "demo| sprout hd"
+                    - "demo| sprout"
+            - name: Juniper
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  substrings:
+                    - "juniper"
+
+        cartoon_channels:
+          name: Cartoon Channels
+          streamProfile: Redirect
+          members:
+            - name: Pixel Network
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Pixel Network"
+                    - "Pixel Retro"
+            - name: Relay family
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Relay"
+
+    international:
+      name: International
+      groups:
+        french:
+          name: French Channels
+          members:
+            - name: "Lumiere 1"
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "FR| Lumiere 1"
+                    - "FR| Lumiere 1 HD"
+            - name: "Lumiere TV"
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "FR| Lumiere"
+
+        german:
+          name: German Channels
+          members:
+            - name: Kanal Eins
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DE| Kanal Eins"
+                    - "DE| Kanal Eins HD"
+            - name: Zweites Kanal
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DE| Zweites"

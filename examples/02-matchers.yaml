@@ -1,0 +1,186 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: matchers-example
+  description: >
+    Demonstrates all four matcher types (regex, hasPrefix, containsAny, exactMatch)
+    with keep/drop actions, case-sensitivity control, and matching on different stream fields.
+spec:
+  profiles:
+    default:
+      name: Default
+      groups:
+
+        regex_matchers:
+          name: Regex Matchers
+          members:
+
+            - name: Arena Sports (regex keep)
+              # Keeps any stream whose name matches the pattern.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^DEMO\\| Arena Sports.*"
+
+            - name: Arena Sports HD only (regex keep + regex drop SD)
+              # A second matcher narrows the set produced by the first.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^DEMO\\| Arena Sports.*"
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: ".*\\bSD\\b.*"
+
+            - name: Arena Sports case-sensitive (regex caseSensitive)
+              # With caseSensitive: true the match is not folded to lower-case first.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "Arena Sports Premier"
+                  caseSensitive: true
+
+            - name: Metro channels by tvg_id (regex on non-name field)
+              # field can be any stream attribute, e.g. tvg_id.
+              matchers:
+                - type: regex
+                  field: tvg_id
+                  action: keep
+                  pattern: ".*\\.metroBroadcast\\..*"
+                  caseSensitive: false
+
+        has_prefix_matchers:
+          name: HasPrefix Matchers
+          members:
+
+            - name: Central News (hasPrefix keep — multiple prefixes)
+              # Keeps a stream if its field starts with ANY of the listed prefixes.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| CENTRAL NEWS"
+                    - "DEMO| Central News"
+
+            - name: Meridian TV without SD (hasPrefix keep + hasPrefix drop)
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Meridian"
+                - type: hasPrefix
+                  field: name
+                  action: drop
+                  prefixes:
+                    - "DEMO| Meridian SD"
+                    - "SD-DEMO| Meridian"
+
+            - name: Horizon TV case-insensitive prefix (hasPrefix caseSensitive false)
+              # caseSensitive: false is the default; listed here explicitly for clarity.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  prefixes:
+                    - "demo| horizon"
+
+        contains_any_matchers:
+          name: ContainsAny Matchers
+          members:
+
+            - name: Factual channels (containsAny keep)
+              # Keeps a stream if its field contains ANY of the listed substrings.
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Documentary"
+                    - "Factual"
+                    - "Nature View"
+
+            - name: Cinema channels excluding pay-per-view (containsAny keep + containsAny drop)
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Film"
+                    - "Cinema"
+                    - "Movies"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - "PPV"
+                    - "Pay Per View"
+                    - "On Demand"
+
+            - name: Alpha channels (containsAny caseSensitive true)
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  caseSensitive: true
+                  substrings:
+                    - "Alpha One"
+                    - "Alpha Two"
+                    - "Alpha Xtra"
+
+        exact_match_matchers:
+          name: ExactMatch Matchers
+          members:
+
+            - name: Apex TV family (exactMatch keep — multiple values)
+              # Keeps a stream only if its field equals one of the listed values exactly.
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Apex TV"
+                    - "DEMO| Apex TV HD"
+                    - "DEMO| Apex 2"
+                    - "DEMO| Apex 3"
+                    - "DEMO| Apex 4"
+
+            - name: Apex TV HD only excluding SD (exactMatch keep + exactMatch drop)
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Apex TV"
+                    - "DEMO| Apex TV HD"
+                - type: exactMatch
+                  field: name
+                  action: drop
+                  values:
+                    - "DEMO| Apex TV SD"
+
+            - name: Beacon TV case-insensitive exact (exactMatch caseSensitive false)
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  values:
+                    - "demo| beacon tv"
+                    - "demo| beacon tv hd"
+
+            - name: Channels matched by tvg_id exact value
+              matchers:
+                - type: exactMatch
+                  field: tvg_id
+                  action: keep
+                  values:
+                    - "beacontv.demo"
+                    - "beaconplus.demo"
+                    - "beaconxtra.demo"
