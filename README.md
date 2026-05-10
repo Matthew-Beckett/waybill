@@ -17,11 +17,9 @@ Some time before Dispatcharr's release, I was working on what is effectively Dis
 
 When Dispatcharr came along, and I saw there was a plugin system. I decided that the pipeline filtering aspect of my M3U filter API could probably be ported to Dispatcharr to allow for fully declerative channel configuration where you describe the semantics of your upstream M3U or XC playlist as YAML.
 
-Inspired by Kubernetes YAML declaration patters with a hint of Terraform's plan and apply functionality my goal for Waybill was to improve upon existing Dispatcharr plugins to give complete and total control to the user to define their channel layouts.
+Inspired by Kubernetes YAML declaration patterns with a hint of Terraform's plan and apply functionality my goal for Waybill was to improve upon existing Dispatcharr plugins to give complete and total control to the user to define their channel layouts.
 
-Waybill provides no mechanism for fragile matchers and transformer which perform token splitting, or attempt to dynamically infer or fuzzy search from patterns. It makes no assumptions about your stream list, you describe to Waybill how your stream list is named and it handles the rest.
-
-By providing stream matching, transforming, and mutli-stream capabilities on a single channel, Waybill aims to replace Lineuparr and Stream-Mappar and EPG Janitor (to an extent). 
+Waybill provides no mechanism for fragile matchers or transformers such as those which perform token splitting, or attempt to dynamically infer quality tags, regions, or other semantics encapsulated within names. Fuzzy search from patterns is powered by regex on a scope as limited or extensive as you like. It makes no assumptions about your stream list, you describe to Waybill how your stream list is named and it handles the rest.
 
 ### AI Disclosure
 
