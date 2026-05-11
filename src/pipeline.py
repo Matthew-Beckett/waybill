@@ -15,6 +15,7 @@ from .types.config import (
     ConfigTransformer,
     MatcherAction,
     MatcherType,
+    OrderStreamsBy,
     TransformerType,
     WaybillConfig,
 )
@@ -45,30 +46,28 @@ def _most_common(values: "Iterable[str | None]") -> "str | None":
         return None
     return counts.most_common(1)[0][0]
 
-
 def _describe_matcher(cfg: ConfigMatcher) -> str:
-    action = cfg.action.value if isinstance(cfg.action, MatcherAction) else str(cfg.action)
-    suffix = f" \u2192 {action}" if action and action != "keep" else ""
-    if cfg.type == MatcherType.REGEX:
-        desc = f'regex on "{cfg.field}": {cfg.pattern}{suffix}'
-    elif cfg.type == MatcherType.HAS_PREFIX:
-        prefixes = ", ".join(f'"{p}"' for p in cfg.prefixes)
-        desc = f'hasPrefix([{prefixes}]) on "{cfg.field}"{suffix}'
-    elif cfg.type == MatcherType.CONTAINS_ANY:
-        substrings = ", ".join(f'"{s}"' for s in cfg.substrings)
-        cs = " (case-sensitive)" if cfg.case_sensitive else ""
-        desc = f'containsAny([{substrings}]) on "{cfg.field}"{cs}{suffix}'
-    elif cfg.type == MatcherType.EXACT_MATCH:
-        values = ", ".join(f'"{v}"' for v in cfg.values)
-        cs = " (case-sensitive)" if cfg.case_sensitive else ""
-        desc = f'exactMatch([{values}]) on "{cfg.field}"{cs}{suffix}'
-    else:
-        desc = str(cfg.type.value)
+    suffix = f" \u2192 {cfg.action}" if cfg.action and cfg.action != "keep" else ""
+    match cfg.type:
+        case MatcherType.REGEX:
+            desc = f'regex on "{cfg.field}": {cfg.pattern}{suffix}'
+        case MatcherType.HAS_PREFIX:
+            prefixes = ", ".join(f'"{p}"' for p in cfg.prefixes)
+            desc = f'hasPrefix([{prefixes}]) on "{cfg.field}"{suffix}'
+        case MatcherType.CONTAINS_ANY:
+            substrings = ", ".join(f'"{s}"' for s in cfg.substrings)
+            cs = " (case-sensitive)" if cfg.case_sensitive else ""
+            desc = f'containsAny([{substrings}]) on "{cfg.field}"{cs}{suffix}'
+        case MatcherType.EXACT_MATCH:
+            values = ", ".join(f'"{v}"' for v in cfg.values)
+            cs = " (case-sensitive)" if cfg.case_sensitive else ""
+            desc = f'exactMatch([{values}]) on "{cfg.field}"{cs}{suffix}'
+        case _:
+            desc = str(cfg.type.value)
     if cfg.transformers:
         pre_descs = "; ".join(_describe_transformer(t) for t in cfg.transformers)
         desc = f"[pre: {pre_descs}] {desc}"
     return desc
-
 
 def _describe_transformer(cfg: ConfigTransformer) -> str:
     if cfg.type == TransformerType.CONVERT_CARDINAL_NUMBERS:
@@ -95,12 +94,48 @@ def _describe_transformer(cfg: ConfigTransformer) -> str:
     return str(cfg.type.value)
 
 
+def _quality_key(stream_stats: "dict | None") -> "tuple[int, float]":
+    """Return a (height, bitrate) sort key for quality ordering.
+
+    Streams with missing or unparseable stats return (0, 0.0) so they sort
+    to the end when the caller reverses the sort (descending).
+    """
+    if not stream_stats:
+        return (0, 0.0)
+    resolution = stream_stats.get("resolution", "")
+    try:
+        height = int(str(resolution).split("x")[1]) if resolution and "x" in str(resolution) else 0
+    except (IndexError, ValueError):
+        height = 0
+    try:
+        bitrate = float(stream_stats.get("video_bitrate", 0) or 0)
+    except (TypeError, ValueError):
+        bitrate = 0.0
+    return (height, bitrate)
+
+
+def _quality_order_reason(stream_stats: "dict | None") -> str:
+    """Return a human-readable ordering reason string for the plan output."""
+    if not stream_stats:
+        return "quality: no stats"
+    resolution = stream_stats.get("resolution", "")
+    if not resolution:
+        return "quality: no stats"
+    try:
+        height = int(str(resolution).split("x")[1])
+        bitrate = float(stream_stats.get("video_bitrate", 0) or 0)
+        return f"quality: {height}p, {bitrate:.0f}kbps"
+    except (IndexError, ValueError):
+        return "quality: no stats"
+
+
 class MemberPipeline:
     """Encapsulates matcher and transformer instances for a single ConfigMember."""
 
-    def __init__(self, member: ConfigMember, inherited_stream_profile: "str | None" = None) -> None:
+    def __init__(self, member: ConfigMember, inherited_stream_profile: "str | None" = None, inherited_order_streams_by: "OrderStreamsBy | None" = None) -> None:
         self._member = member
         self._effective_stream_profile: str | None = member.stream_profile or inherited_stream_profile
+        self._effective_order_streams_by: OrderStreamsBy | None = member.order_streams_by or inherited_order_streams_by
         self._matchers: list[
             WaybillMatcherRegex | WaybillMatcherHasPrefix | WaybillMatcherContainsAny | WaybillMatcherExactMatch
         ] = [
@@ -113,6 +148,8 @@ class MemberPipeline:
             | {t.field for cfg in member.matchers for t in cfg.transformers}
             | {"id", "name", "tvg_id", "logo_url"}
         )
+        if self._effective_order_streams_by is OrderStreamsBy.QUALITY:
+            self._required_fields.add("stream_stats")
         self._matcher_descs: list[str] = [_describe_matcher(cfg) for cfg in member.matchers]
         self._transformer_descs: list[str] = [_describe_transformer(cfg) for cfg in member.transformers]
 
@@ -139,7 +176,9 @@ class MemberPipeline:
             .iterator(chunk_size=chunk_size)
         )
 
-        groups: defaultdict[str, list[StreamRecord]] = defaultdict(list)
+        # Each group holds (StreamRecord, sort_key) so the sort key is captured while
+        # the raw Stream object is still in scope (stream_stats may not be on StreamRecord).
+        groups: defaultdict[str, list[tuple[StreamRecord, tuple[int, float]]]] = defaultdict(list)
         dropped_records: list[DroppedRecord] = []
 
         transformer_pairs = list(zip(
@@ -181,27 +220,42 @@ class MemberPipeline:
                 working = result
 
             if not was_dropped:
-                groups[working.name].append(
+                stream_stats = getattr(stream, "stream_stats", None)
+                order_reason: str | None = None
+                sort_key: tuple[int, float] = (0, 0.0)
+                if self._effective_order_streams_by is OrderStreamsBy.QUALITY:
+                    order_reason = _quality_order_reason(stream_stats)
+                    sort_key = _quality_key(stream_stats)
+                groups[working.name].append((
                     StreamRecord(
                         id=stream.pk,
                         original_name=original_name,
                         transformed_name=working.name,
                         tvg_id=stream.tvg_id,
                         logo_url=stream.logo_url,
+                        order_reason=order_reason,
                         steps=steps,
-                    )
-                )
+                    ),
+                    sort_key,
+                ))
 
         channels = sorted(
             (
                 ChannelPlan(
                     name=name,
-                    epg_id=_most_common(r.tvg_id for r in records),
-                    logo_url=_most_common(r.logo_url for r in records),
+                    epg_id=_most_common(r.tvg_id for r, _ in entries),
+                    logo_url=_most_common(r.logo_url for r, _ in entries),
                     stream_profile=self._effective_stream_profile,
-                    streams=records,
+                    order_streams_by=self._effective_order_streams_by,
+                    streams=[
+                        r for r, _ in (
+                            sorted(entries, key=lambda e: e[1], reverse=True)
+                            if self._effective_order_streams_by is OrderStreamsBy.QUALITY
+                            else entries
+                        )
+                    ],
                 )
-                for name, records in groups.items()
+                for name, entries in groups.items()
             ),
             key=lambda c: c.name,
         )
@@ -217,11 +271,12 @@ class MemberPipeline:
 class GroupPipeline:
     """Encapsulates processing for a single ConfigGroup (→ Dispatcharr ChannelGroup)."""
 
-    def __init__(self, key: str, name: str, members: list[ConfigMember], inherited_stream_profile: "str | None" = None, group_stream_profile: "str | None" = None) -> None:
+    def __init__(self, key: str, name: str, members: list[ConfigMember], inherited_stream_profile: "str | None" = None, group_stream_profile: "str | None" = None, inherited_order_streams_by: "OrderStreamsBy | None" = None, group_order_streams_by: "OrderStreamsBy | None" = None) -> None:
         self._key = key
         self._name = name
-        effective = group_stream_profile or inherited_stream_profile
-        self._pipelines = [MemberPipeline(m, inherited_stream_profile=effective) for m in members]
+        effective_sp = group_stream_profile or inherited_stream_profile
+        effective_osb = group_order_streams_by or inherited_order_streams_by
+        self._pipelines = [MemberPipeline(m, inherited_stream_profile=effective_sp, inherited_order_streams_by=effective_osb) for m in members]
 
     def process(self, chunk_size: int = CHUNK_SIZE) -> GroupPlan:
         return GroupPlan(
@@ -244,6 +299,8 @@ class ProfilePipeline:
                 members=cat.members,
                 inherited_stream_profile=profile.stream_profile,
                 group_stream_profile=cat.stream_profile,
+                inherited_order_streams_by=profile.order_streams_by,
+                group_order_streams_by=cat.order_streams_by,
             )
             for cat_key, cat in profile.groups.items()
         ]
@@ -303,13 +360,17 @@ class WaybillPlanFormatter:
                             lines.append(f"        Logo:   {channel.logo_url}")
                         if channel.stream_profile:
                             lines.append(f"        Stream Profile: {channel.stream_profile}")
+                        if channel.order_streams_by:
+                            lines.append(f"        Order Streams By: {channel.order_streams_by.value}")
                         for stream in channel.streams:
                             if stream.original_name != stream.transformed_name:
+                                suffix = f"  [{stream.order_reason}]" if stream.order_reason else ""
                                 lines.append(
-                                    f'        "{stream.original_name}"  →  "{stream.transformed_name}"'
+                                    f'        "{stream.original_name}"  \u2192  "{stream.transformed_name}"{suffix}'
                                 )
                             else:
-                                lines.append(f'        "{stream.original_name}"')
+                                suffix = f"  [{stream.order_reason}]" if stream.order_reason else ""
+                                lines.append(f'        "{stream.original_name}"{suffix}')
                             for step in stream.steps:
                                 if step.name_in != step.name_out:
                                     lines.append(

@@ -36,6 +36,7 @@ from src.types.config import (
     ConfigProfile,
     ConfigSpec,
     ConfigTransformer,
+    OrderStreamsBy,
     WaybillConfig,
 )
 
@@ -46,6 +47,9 @@ YAML_KEY: dict[tuple[type, str], str] = {
     (ConfigProfile, "stream_profile"): "streamProfile",
     (ConfigGroup, "stream_profile"): "streamProfile",
     (ConfigMember, "stream_profile"): "streamProfile",
+    (ConfigProfile, "order_streams_by"): "orderStreamsBy",
+    (ConfigGroup, "order_streams_by"): "orderStreamsBy",
+    (ConfigMember, "order_streams_by"): "orderStreamsBy",
 }
 
 # Fields entirely omitted from the schema (internal implementation details).
@@ -96,15 +100,25 @@ FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
     (ConfigProfile, "stream_profile"): (
         "Default stream profile applied to every channel in this profile"
     ),
-    (ConfigProfile, "groups"): "Map of group key → ConfigGroup",
+    (ConfigProfile, "order_streams_by"): (
+        "Default stream ordering applied to every channel in this profile"
+    ),
+    (ConfigProfile, "groups"): "Map of group key \u2192 ConfigGroup",
     (ConfigGroup, "name"): "Human-readable group name",
     (ConfigGroup, "stream_profile"): (
         "Stream profile override for this group (overrides profile-level setting)"
+    ),
+    (ConfigGroup, "order_streams_by"): (
+        "Stream ordering override for this group (overrides profile-level setting)"
     ),
     (ConfigGroup, "members"): "Ordered list of channel members",
     (ConfigMember, "name"): "Member (channel) name",
     (ConfigMember, "stream_profile"): (
         "Stream profile override for this member's channels "
+        "(overrides group- and profile-level settings)"
+    ),
+    (ConfigMember, "order_streams_by"): (
+        "Stream ordering override for this member's channels "
         "(overrides group- and profile-level settings)"
     ),
     (ConfigMember, "matchers"): "Ordered matchers used to filter input streams",
@@ -183,6 +197,10 @@ def _py_type_to_schema(py_type: Any) -> dict[str, Any]:
         if len(non_none) == 1:
             inner = _py_type_to_schema(non_none[0])
             if has_none:
+                # Preserve enum constraint via oneOf so null is a valid alternative
+                # without collapsing the enum values.
+                if "enum" in inner:
+                    return {"oneOf": [inner, {"type": "null"}]}
                 return {"type": [inner["type"], "null"]} if "type" in inner else {"oneOf": [inner, {"type": "null"}]}
             return inner
 
@@ -283,9 +301,7 @@ def _dataclass_to_schema(cls: type) -> dict[str, Any]:
     return schema
 
 
-# ---------------------------------------------------------------------------
 # Entry point
-# ---------------------------------------------------------------------------
 
 
 def build_schema() -> dict[str, Any]:

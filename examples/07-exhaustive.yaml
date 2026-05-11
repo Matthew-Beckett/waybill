@@ -7,20 +7,22 @@ metadata:
     all four matcher types, all four transformer types, pre-transformers inside
     matchers, keep and drop actions, caseSensitive control, field targeting
     beyond "name", stream profiles at profile / group / member level,
-    multiple profiles, multiple groups, null stream profile, and multi-step
-    transformation pipelines.
+    orderStreamsBy at profile / group / member level, multiple profiles,
+    multiple groups, null stream profile and null orderStreamsBy, and
+    multi-step transformation pipelines.
 
 spec:
   profiles:
 
     # Profile 1 -- Standard (HD-preferred)
     # Default stream profile: Proxy.
+    # Default stream ordering: quality (sort by resolution/bitrate).
     # Overridden at group level for sports, and at member level for one channel.
     standard:
       name: Standard
       streamProfile: Proxy        # profile-level default
+      orderStreamsBy: quality     # profile-level default: sort by quality
       groups:
-
         nbs:
           name: NBS
           # Inherits Proxy from the profile.
@@ -198,6 +200,8 @@ spec:
         sports:
           name: Sports
           streamProfile: Redirect    # group-level override -- sports use Redirect
+          # Group-level orderStreamsBy explicitly cleared -- sports ordering managed externally.
+          orderStreamsBy: null
           members:
 
             - name: Arena Sports
@@ -222,8 +226,10 @@ spec:
                   prefix: "DEMO| "
 
             - name: Titan Sport
-              # Member-level override -- Titan uses a different profile from the group.
+              # Member-level overrides -- Titan uses a different profile and re-enables
+              # quality ordering (group cleared it).
               streamProfile: Proxy
+              orderStreamsBy: quality
               matchers:
                 - type: regex
                   field: name
@@ -257,8 +263,10 @@ spec:
 
         news:
           name: News
-          # Group stream profile explicitly cleared -- news channels have no default.
+          # Group stream profile and orderStreamsBy explicitly cleared --
+          # news channels have no default profile and no quality sorting.
           streamProfile: null
+          orderStreamsBy: null
           members:
 
             - name: Orbit News

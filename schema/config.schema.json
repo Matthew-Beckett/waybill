@@ -82,6 +82,20 @@
             "null"
           ],
           "description": "Default stream profile applied to every channel in this profile"
+        },
+        "orderStreamsBy": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "quality"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Default stream ordering applied to every channel in this profile"
         }
       },
       "additionalProperties": false
@@ -107,6 +121,20 @@
             "null"
           ],
           "description": "Stream profile override for this group (overrides profile-level setting)"
+        },
+        "orderStreamsBy": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "quality"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stream ordering override for this group (overrides profile-level setting)"
         }
       },
       "required": [
@@ -142,6 +170,20 @@
             "null"
           ],
           "description": "Stream profile override for this member's channels (overrides group- and profile-level settings)"
+        },
+        "orderStreamsBy": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "quality"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stream ordering override for this member's channels (overrides group- and profile-level settings)"
         }
       },
       "required": [

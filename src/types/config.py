@@ -63,6 +63,10 @@ class CardinalOutputType(Enum):
     WORD = "word"
 
 
+class OrderStreamsBy(Enum):
+    QUALITY = "quality"
+
+
 @dataclass(frozen=True)
 class ConfigMetadata:
     name: str
@@ -102,7 +106,7 @@ def _to_transformer(item: "ConfigTransformer | Mapping[str, Any]") -> "ConfigTra
     else:
         direction = ""
 
-    raw_output_type = item.get("outputType", item.get("output_type", ""))
+    raw_output_type = item.get("outputType", "")
     output_type: CardinalOutputType | str
     if isinstance(raw_output_type, CardinalOutputType):
         output_type = raw_output_type
@@ -116,7 +120,6 @@ def _to_transformer(item: "ConfigTransformer | Mapping[str, Any]") -> "ConfigTra
         "action",
         "direction",
         "outputType",
-        "output_type",
         "field",
         "pattern",
         "replacement",
@@ -158,12 +161,22 @@ class ConfigMatcher:
         self.transformers = [_to_transformer(item) for item in self.transformers]
 
 
+def _to_order_streams_by(raw: Any) -> "OrderStreamsBy | None":
+    """Coerce a raw YAML value to OrderStreamsBy, or None if absent."""
+    if raw is None or raw == "":
+        return None
+    if isinstance(raw, OrderStreamsBy):
+        return raw
+    return OrderStreamsBy(str(raw))
+
+
 @dataclass
 class ConfigMember:
     name: str
     matchers: list[ConfigMatcher] = field(default_factory=_empty_matchers)
     transformers: list[ConfigTransformer] = field(default_factory=_empty_transformers)
     stream_profile: str | None = None
+    order_streams_by: OrderStreamsBy | None = None
 
     def __post_init__(self):
         self.matchers = [self._to_matcher(item) for item in self.matchers]
@@ -193,7 +206,7 @@ class ConfigMember:
         raw_values = item.get("values", [])
         values = [str(v) for v in cast(list[Any], raw_values)] if isinstance(raw_values, list) else _empty_str_list()
 
-        case_sensitive = bool(item.get("caseSensitive", item.get("case_sensitive", False)))
+        case_sensitive = bool(item.get("caseSensitive", False))
 
         raw_transformers = item.get("transformers", [])
         transformers = cast(list[ConfigTransformer], raw_transformers) if isinstance(raw_transformers, list) else _empty_transformers()
@@ -216,6 +229,7 @@ class ConfigGroup:
     name: str
     members: list[ConfigMember] = field(default_factory=_empty_members)
     stream_profile: str | None = None
+    order_streams_by: OrderStreamsBy | None = None
 
     def __post_init__(self):
         self.members = [self._to_member(item) for item in self.members]
@@ -235,7 +249,8 @@ class ConfigGroup:
             name=str(item.get("name", "")),
             matchers=matchers,
             transformers=transformers,
-            stream_profile=item.get("streamProfile") or item.get("stream_profile") or None,
+            stream_profile=item.get("streamProfile") or None,
+            order_streams_by=_to_order_streams_by(item.get("orderStreamsBy")),
         )
 
 
@@ -244,6 +259,7 @@ class ConfigProfile:
     name: str = ""
     groups: dict[str, ConfigGroup] = field(default_factory=_empty_str_group_dict)
     stream_profile: str | None = None
+    order_streams_by: OrderStreamsBy | None = None
 
     def __post_init__(self):
         self.groups = {name: self._to_group(value) for name, value in self.groups.items()}
@@ -259,7 +275,8 @@ class ConfigProfile:
         return ConfigGroup(
             name=str(item.get("name", "")),
             members=members,
-            stream_profile=item.get("streamProfile") or item.get("stream_profile") or None,
+            stream_profile=item.get("streamProfile") or None,
+            order_streams_by=_to_order_streams_by(item.get("orderStreamsBy")),
         )
 
 
@@ -281,7 +298,8 @@ class ConfigSpec:
         return ConfigProfile(
             name=str(item.get("name", "")),
             groups=groups,
-            stream_profile=item.get("streamProfile") or item.get("stream_profile") or None,
+            stream_profile=item.get("streamProfile") or None,
+            order_streams_by=_to_order_streams_by(item.get("orderStreamsBy")),
         )
 
 

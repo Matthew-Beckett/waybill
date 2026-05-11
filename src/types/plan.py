@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .config import OrderStreamsBy
+
 
 def _empty_stream_records() -> list["StreamRecord"]:
     return []
@@ -60,6 +62,7 @@ class StreamRecord:
     transformed_name: str
     tvg_id: str | None = None
     logo_url: str | None = None
+    order_reason: str | None = None
     steps: list[TransformStep] = field(default_factory=_empty_transform_steps)
 
 
@@ -71,6 +74,7 @@ class ChannelPlan:
     epg_id: str | None = None
     logo_url: str | None = None
     stream_profile: str | None = None
+    order_streams_by: OrderStreamsBy | None = None
     streams: list[StreamRecord] = field(default_factory=_empty_stream_records)
 
 
