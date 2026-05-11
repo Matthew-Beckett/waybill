@@ -23,6 +23,15 @@ bundle = [
     "pyyaml>=6.0",
     "word2number>=1.1",
 ]
+dev = [
+    "dacite>=1.9.2",
+    "pyyaml>=6.0",
+    "pytest>=8.3.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
 
 [tool.uv.sources]
 dispatcharr = { path = "../Dispatcharr" }
