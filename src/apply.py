@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Protocol
+
+from django.db import transaction
 
 from apps.channels.models import Channel, ChannelGroup, ChannelProfile, ChannelProfileMembership, ChannelStream, Logo
 from apps.epg.models import EPGData
@@ -9,14 +11,14 @@ from core.models import StreamProfile
 from .types.plan import WaybillPlan
 
 if TYPE_CHECKING:
-    pass
+    from .types.plan import ChannelPlan
 
 _MODE_UPSERT = "upsert"
 _MODE_OVERWRITE = "overwrite"
 
 
 class WaybillApplier:
-    def __init__(self, plan: WaybillPlan, mode: str, logger: Any) -> None:
+    def __init__(self, plan: WaybillPlan, mode: str, logger: "LoggerProtocol") -> None:
         self._plan = plan
         self._mode = mode if mode in (_MODE_UPSERT, _MODE_OVERWRITE) else _MODE_UPSERT
         self._logger = logger
@@ -37,45 +39,45 @@ class WaybillApplier:
             "streams_assigned": 0,
         }
 
-        for profile in self._plan.profiles:
-            channel_profile, profile_created = ChannelProfile.objects.get_or_create(name=profile.key)
-            if profile_created:
-                self._logger.info(f"[apply] Created channel profile: {profile.key!r}")
-                # Dispatcharr's post_save signal auto-adds every existing channel to a new
-                # profile with enabled=True.  Disable them all immediately so that only the
-                # channels declared in this manifest end up enabled.
-                ChannelProfileMembership.objects.filter(channel_profile=channel_profile).update(enabled=False)
+        with transaction.atomic():
+            for profile in self._plan.profiles:
+                channel_profile, profile_created = ChannelProfile.objects.get_or_create(name=profile.key)
+                if profile_created:
+                    self._logger.info(f"[apply] Created channel profile: {profile.key!r}")
+                    # Dispatcharr's post_save signal auto-adds every existing channel to a new
+                    # profile with enabled=True. Disable them so only manifest channels are enabled.
+                    ChannelProfileMembership.objects.filter(channel_profile=channel_profile).update(enabled=False)
 
-            for plan_group in profile.groups:
-                group, group_created = ChannelGroup.objects.get_or_create(name=plan_group.name)
-                if group_created:
-                    summary["groups_created"] += 1
-                    self._logger.info(f"[apply] Created channel group: {plan_group.name!r}")
+                for plan_group in profile.groups:
+                    group, group_created = ChannelGroup.objects.get_or_create(name=plan_group.name)
+                    if group_created:
+                        summary["groups_created"] += 1
+                        self._logger.info(f"[apply] Created channel group: {plan_group.name!r}")
 
-                if self._mode == _MODE_OVERWRITE:
-                    plan_channel_names = {
-                        channel.name
-                        for member in plan_group.members
-                        for channel in member.channels
-                    }
-                    deleted_qs = Channel.objects.filter(channel_group=group).exclude(
-                        name__in=plan_channel_names
-                    )
-                    deleted_count, _ = deleted_qs.delete()
-                    if deleted_count:
-                        summary["channels_deleted"] += deleted_count
-                        self._logger.info(
-                            f"[apply] Deleted {deleted_count} unlisted channel(s) from group {plan_group.name!r}"
+                    if self._mode == _MODE_OVERWRITE:
+                        plan_channel_names = {
+                            channel.name
+                            for member in plan_group.members
+                            for channel in member.channels
+                        }
+                        deleted_qs = Channel.objects.filter(channel_group=group).exclude(
+                            name__in=plan_channel_names
                         )
+                        deleted_count, _ = deleted_qs.delete()
+                        if deleted_count:
+                            summary["channels_deleted"] += deleted_count
+                            self._logger.info(
+                                f"[apply] Deleted {deleted_count} unlisted channel(s) from group {plan_group.name!r}"
+                            )
 
-                for member in plan_group.members:
-                    for channel_plan in member.channels:
-                        created, updated, assigned = self._apply_channel(
-                            channel_plan, group, channel_profile
-                        )
-                        summary["channels_created"] += created
-                        summary["channels_updated"] += updated
-                        summary["streams_assigned"] += assigned
+                    for member in plan_group.members:
+                        for channel_plan in member.channels:
+                            created, updated, assigned = self._apply_channel(
+                                channel_plan, group, channel_profile
+                            )
+                            summary["channels_created"] += created
+                            summary["channels_updated"] += updated
+                            summary["streams_assigned"] += assigned
 
         self._log_summary(summary)
         return summary
@@ -106,7 +108,7 @@ class WaybillApplier:
 
     def _apply_channel(
         self,
-        channel_plan: "Any",  # ChannelPlan
+        channel_plan: "ChannelPlan",
         group: ChannelGroup,
         channel_profile: ChannelProfile,
     ) -> tuple[int, int, int]:
@@ -187,3 +189,11 @@ class WaybillApplier:
             f"{summary['channels_deleted']} channel(s) deleted, "
             f"{summary['streams_assigned']} stream(s) assigned."
         )
+
+
+class LoggerProtocol(Protocol):
+    def info(self, message: str) -> None:
+        ...
+
+    def warning(self, message: str) -> None:
+        ...

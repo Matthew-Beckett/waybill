@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 import json
 import yaml
 from dacite import Config, from_dict
-from typing import Any
+from typing import Any, Mapping, Protocol, cast
 
 from .src.types.plugins import Plugin as DispatcharrPlugin
 from .src.types.plugins import PluginFieldType
@@ -15,11 +15,37 @@ from .src.types.config import WaybillConfig
 from .src.pipeline import WaybillPipeline, WaybillPlanFormatter
 from .src.apply import WaybillApplier
 
+
+class WaybillError(Exception):
+    """Base class for plugin runtime errors."""
+
+
+class WaybillConfigurationError(WaybillError):
+    """Raised when plugin configuration cannot be parsed or validated."""
+
+
+class WaybillContextError(WaybillError):
+    """Raised when runtime context is missing required contracts."""
+
+
+class WaybillActionError(WaybillError):
+    """Raised when an unsupported action is requested."""
+
+
+class WaybillLogger(Protocol):
+    def info(self, message: str) -> None:
+        ...
+
+    def warning(self, message: str) -> None:
+        ...
+
+    def error(self, message: str) -> None:
+        ...
+
+
 class Plugin(DispatcharrPlugin):
     def __init__(self, path: str = "plugin.json") -> None:
-        # This is a hack and could possibly be fragile in the even the way the plugin is loaded changes, 
-        # But it allows us to keep the plugin manifest as the source of truth instead of the cursed bump_version.py
-        # in Stream-Mappar.
+        # Keep the plugin manifest as source of truth for metadata.
         plugin_dir = os.path.dirname(os.path.abspath(__file__))
         plugin = self._load_manifest(os.path.join(plugin_dir, path))
         super().__init__(
@@ -43,47 +69,89 @@ class Plugin(DispatcharrPlugin):
             config=Config(cast=[PluginFieldType]),
         )
 
-    def _load_configuration(self, context: dict[str, Any]) -> None:
-        # Something, something exception handlers in Python are expensive...
-        # Don't @ me about this, it's just easier to read than a million nested if statements and try/except blocks
-        config_data = context.get("settings", {})
-        manifest_str = config_data.get("manifest", "")
-        if not manifest_str:
-            raise Exception("Configuration manifest is empty or missing")
+    def _require_logger(self, context: Mapping[str, Any]) -> WaybillLogger:
+        logger = context.get("logger")
+        if logger is None:
+            raise WaybillContextError("Runtime context is missing a logger")
+
+        for method in ("info", "warning", "error"):
+            if not callable(getattr(logger, method, None)):
+                raise WaybillContextError(
+                    f"Runtime logger is missing required method {method!r}"
+                )
+
+        return cast(WaybillLogger, logger)
+
+    def _load_configuration(self, context: Mapping[str, Any]) -> None:
+        config_data_raw = context.get("settings", {})
+        if not isinstance(config_data_raw, dict):
+            raise WaybillConfigurationError("Configuration settings must be a mapping")
+        config_data = cast(dict[str, Any], config_data_raw)
+
+        manifest_value = config_data.get("manifest", "")
+        if not isinstance(manifest_value, str) or not manifest_value.strip():
+            raise WaybillConfigurationError("Configuration manifest is empty or missing")
+
         try:
-            parsed = yaml.safe_load(manifest_str)
+            parsed = yaml.safe_load(manifest_value)
         except yaml.YAMLError as e:
-            raise Exception(f"Configuration manifest is not valid YAML: {e}")
+            raise WaybillConfigurationError(
+                f"Configuration manifest is not valid YAML: {e}"
+            ) from e
+
         if not isinstance(parsed, dict):
-            raise Exception(f"Configuration manifest did not parse to a mapping (got {type(parsed).__name__})")
+            raise WaybillConfigurationError(
+                "Configuration manifest did not parse to a mapping "
+                f"(got {type(parsed).__name__})"
+            )
+        parsed_dict = cast(dict[Any, Any], parsed)
+        parsed_mapping: dict[str, Any] = {str(k): v for k, v in parsed_dict.items()}
+
         try:
-            self.configuration = WaybillConfig(**{str(k): v for k, v in parsed.items()})  # type: ignore[call-arg]
-        except Exception as e:
-            raise Exception(f"Configuration is not valid: {e}") from e
+            self.configuration = WaybillConfig(**parsed_mapping)
+        except TypeError as e:
+            raise WaybillConfigurationError(
+                f"Configuration manifest shape is invalid: {e}"
+            ) from e
+        except ValueError as e:
+            raise WaybillConfigurationError(
+                f"Configuration manifest failed invariant checks: {e}"
+            ) from e
 
         return None
 
-    def _run_plan(self, logger: Any) -> None:
+    def _run_plan(self, logger: WaybillLogger) -> None:
         pipeline = WaybillPipeline(self.configuration)
         plan = pipeline.compute_plan()
         formatter = WaybillPlanFormatter()
         for line in formatter.format(plan):
             logger.info(line)
 
-    def _run_apply(self, logger: Any, params: dict[str, Any], context: dict[str, Any]) -> None:
+    def _run_apply(
+        self,
+        logger: WaybillLogger,
+        params: Mapping[str, Any],
+        context: Mapping[str, Any],
+    ) -> None:
+        settings = context.get("settings", {})
+        apply_mode: Any = None
+        if isinstance(settings, dict):
+            settings_dict = cast(dict[str, Any], settings)
+            apply_mode = settings_dict.get("apply_mode")
+        param_mode = params.get("mode")
         mode = (
-            params.get("mode")
-            or context.get("settings", {}).get("apply_mode")
-            or "upsert"
-        )
+            param_mode if isinstance(param_mode, str) and param_mode else None
+        ) or (
+            apply_mode if isinstance(apply_mode, str) and apply_mode else None
+        ) or "upsert"
         pipeline = WaybillPipeline(self.configuration)
         plan = pipeline.compute_plan()
         applier = WaybillApplier(plan, mode, logger)
         applier.apply()
 
-    def run(self, action: str, params: dict[str, Any], context: dict[str, dict[str, Any]]) -> None:
+    def run(self, action: str, params: dict[str, Any], context: dict[str, Any]) -> None:
         self._load_configuration(context)
-        logger = context.get("logger")
+        logger = self._require_logger(context)
 
         if action == "plan":
             self._run_plan(logger)
@@ -94,4 +162,4 @@ class Plugin(DispatcharrPlugin):
             return None
 
         logger.warning(f"Unknown action: {action!r}")
-        return None
+        raise WaybillActionError(f"Unknown action: {action!r}")

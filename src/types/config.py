@@ -3,6 +3,10 @@ from enum import Enum as Enum
 from typing import Any, Mapping, cast
 
 
+SUPPORTED_CONFIG_KIND = "WaybillConfig"
+SUPPORTED_CONFIG_VERSION = "v1alpha1"
+
+
 def _empty_str_list() -> list[str]:
     return []
 
@@ -291,6 +295,16 @@ class WaybillConfig:
     def __post_init__(self):
         self.metadata = self._to_metadata(self.metadata)
         self.spec = self._to_spec(self.spec)
+        if self.kind != SUPPORTED_CONFIG_KIND:
+            raise ValueError(
+                f"Unsupported config kind {self.kind!r}; expected {SUPPORTED_CONFIG_KIND!r}"
+            )
+        if self.version != SUPPORTED_CONFIG_VERSION:
+            raise ValueError(
+                f"Unsupported config version {self.version!r}; expected {SUPPORTED_CONFIG_VERSION!r}"
+            )
+        if not self.metadata.name.strip():
+            raise ValueError("metadata.name must be a non-empty string")
 
     @staticmethod
     def _to_metadata(item: ConfigMetadata | Mapping[str, Any]) -> ConfigMetadata:
