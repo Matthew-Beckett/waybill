@@ -12,7 +12,8 @@ from typing import Any, Mapping, Protocol, cast
 from .src.types.plugins import Plugin as DispatcharrPlugin
 from .src.types.plugins import PluginFieldType
 from .src.types.config import WaybillConfig
-from .src.pipeline import WaybillPipeline, WaybillPlanFormatter
+from .src.pipeline import WaybillPipeline
+from .src.plan import WaybillPlanFormatter
 from .src.apply import WaybillApplier
 
 

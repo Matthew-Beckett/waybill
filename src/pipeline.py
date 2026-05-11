@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from copy import copy
-from typing import Iterable
 
 from apps.channels.models import Stream
 
@@ -15,9 +14,9 @@ from .types.config import (
     OrderStreamsBy,
     WaybillConfig,
 )
+from .plan import assemble_member_plan
 from .types.plan import (
     GroupPlan,
-    ChannelPlan,
     DroppedRecord,
     MemberPlan,
     ProfilePlan,
@@ -27,48 +26,6 @@ from .types.plan import (
 )
 
 CHUNK_SIZE = 1000
-
-
-def _most_common(values: "Iterable[str | None]") -> "str | None":
-    """Return the most frequently occurring non-None value, or None if all are absent."""
-    counts: Counter[str] = Counter(v for v in values if v)
-    if not counts:
-        return None
-    return counts.most_common(1)[0][0]
-
-def _quality_key(stream_stats: "dict | None") -> "tuple[int, float]":
-    """Return a (height, bitrate) sort key for quality ordering.
-
-    Streams with missing or unparseable stats return (0, 0.0) so they sort
-    to the end when the caller reverses the sort (descending).
-    """
-    if not stream_stats:
-        return (0, 0.0)
-    resolution = stream_stats.get("resolution", "")
-    try:
-        height = int(str(resolution).split("x")[1]) if resolution and "x" in str(resolution) else 0
-    except (IndexError, ValueError):
-        height = 0
-    try:
-        bitrate = float(stream_stats.get("video_bitrate", 0) or 0)
-    except (TypeError, ValueError):
-        bitrate = 0.0
-    return (height, bitrate)
-
-
-def _quality_order_reason(stream_stats: "dict | None") -> str:
-    """Return a human-readable ordering reason string for the plan output."""
-    if not stream_stats:
-        return "quality: no stats"
-    resolution = stream_stats.get("resolution", "")
-    if not resolution:
-        return "quality: no stats"
-    try:
-        height = int(str(resolution).split("x")[1])
-        bitrate = float(stream_stats.get("video_bitrate", 0) or 0)
-        return f"quality: {height}p, {bitrate:.0f}kbps"
-    except (IndexError, ValueError):
-        return "quality: no stats"
 
 
 class MemberPipeline:
@@ -116,9 +73,9 @@ class MemberPipeline:
             .iterator(chunk_size=chunk_size)
         )
 
-        # Each group holds (StreamRecord, sort_key) so the sort key is captured while
-        # the raw Stream object is still in scope (stream_stats may not be on StreamRecord).
-        groups: defaultdict[str, list[tuple[StreamRecord, tuple[int, float]]]] = defaultdict(list)
+        # Each group holds (stream_stats, StreamRecord); stream_stats is a raw dict captured
+        # while the ORM object is still in scope and passed to the plan assembler.
+        groups: defaultdict[str, list[tuple["dict | None", StreamRecord]]] = defaultdict(list)
         dropped_records: list[DroppedRecord] = []
 
         transformer_pairs = list(zip(
@@ -161,50 +118,26 @@ class MemberPipeline:
 
             if not was_dropped:
                 stream_stats = getattr(stream, "stream_stats", None)
-                order_reason: str | None = None
-                sort_key: tuple[int, float] = (0, 0.0)
-                if self._effective_order_streams_by is OrderStreamsBy.QUALITY:
-                    order_reason = _quality_order_reason(stream_stats)
-                    sort_key = _quality_key(stream_stats)
                 groups[working.name].append((
+                    stream_stats,
                     StreamRecord(
                         id=stream.pk,
                         original_name=original_name,
                         transformed_name=working.name,
                         tvg_id=stream.tvg_id,
                         logo_url=stream.logo_url,
-                        order_reason=order_reason,
                         steps=steps,
                     ),
-                    sort_key,
                 ))
 
-        channels = sorted(
-            (
-                ChannelPlan(
-                    name=name,
-                    epg_id=_most_common(r.tvg_id for r, _ in entries),
-                    logo_url=_most_common(r.logo_url for r, _ in entries),
-                    stream_profile=self._effective_stream_profile,
-                    order_streams_by=self._effective_order_streams_by,
-                    streams=[
-                        r for r, _ in (
-                            sorted(entries, key=lambda e: e[1], reverse=True)
-                            if self._effective_order_streams_by is OrderStreamsBy.QUALITY
-                            else entries
-                        )
-                    ],
-                )
-                for name, entries in groups.items()
-            ),
-            key=lambda c: c.name,
-        )
-        return MemberPlan(
+        return assemble_member_plan(
             member_name=self._member.name,
             matcher_descs=self._matcher_descs,
             transformer_descs=self._transformer_descs,
-            channels=channels,
+            raw_groups=groups,
             dropped=dropped_records,
+            effective_stream_profile=self._effective_stream_profile,
+            effective_order_streams_by=self._effective_order_streams_by,
         )
 
 
@@ -270,70 +203,4 @@ class WaybillPipeline:
         )
 
 
-class WaybillPlanFormatter:
-    """Renders a WaybillPlan as a human-readable tree of log lines."""
 
-    def format(self, plan: WaybillPlan) -> list[str]:
-        lines: list[str] = []
-        lines.append(f"=== Waybill Plan: {plan.manifest_name} ===")
-
-        total_channels = 0
-        for profile in plan.profiles:
-            lines.append(f"Profile: {profile.key}")
-            for group in profile.groups:
-                lines.append(f"  [{group.key}] {group.name}")
-                for member in group.members:
-                    lines.append(f"    {member.member_name}")
-                    for i, desc in enumerate(member.matcher_descs, 1):
-                        lines.append(f"      Matcher [{i}]: {desc}")
-                    for i, desc in enumerate(member.transformer_descs, 1):
-                        lines.append(f"      Transformer [T{i}]: {desc}")
-                    for channel in member.channels:
-                        stream_count = len(channel.streams)
-                        total_channels += 1
-                        lines.append(
-                            f"      Channel: {channel.name}  ({stream_count} stream(s))"
-                        )
-                        if channel.epg_id:
-                            lines.append(f"        EPG-ID: {channel.epg_id}")
-                        if channel.logo_url:
-                            lines.append(f"        Logo:   {channel.logo_url}")
-                        if channel.stream_profile:
-                            lines.append(f"        Stream Profile: {channel.stream_profile}")
-                        if channel.order_streams_by:
-                            lines.append(f"        Order Streams By: {channel.order_streams_by.value}")
-                        for stream in channel.streams:
-                            if stream.original_name != stream.transformed_name:
-                                suffix = f"  [{stream.order_reason}]" if stream.order_reason else ""
-                                lines.append(
-                                    f'        "{stream.original_name}"  \u2192  "{stream.transformed_name}"{suffix}'
-                                )
-                            else:
-                                suffix = f"  [{stream.order_reason}]" if stream.order_reason else ""
-                                lines.append(f'        "{stream.original_name}"{suffix}')
-                            for step in stream.steps:
-                                if step.name_in != step.name_out:
-                                    lines.append(
-                                        f'          [T{step.transformer_index}] "{step.name_in}" → "{step.name_out}"'
-                                    )
-                    if member.dropped:
-                        lines.append(f"      Dropped: {member.dropped_count} stream(s)")
-                        for rec in member.dropped:
-                            drop_step = rec.steps[-1] if rec.steps else None
-                            if drop_step:
-                                lines.append(
-                                    f'        "{rec.original_name}"  →  dropped by [T{drop_step.transformer_index}]: {drop_step.transformer_desc}'
-                                )
-                            else:
-                                lines.append(f'        "{rec.original_name}"  →  dropped')
-                            for step in rec.steps[:-1]:
-                                if step.name_in != step.name_out:
-                                    lines.append(
-                                        f'          [T{step.transformer_index}] "{step.name_in}" → "{step.name_out}"'
-                                    )
-
-        profile_count = len(plan.profiles)
-        lines.append(
-            f"=== Summary: {total_channels} channel(s) across {profile_count} profile(s) ==="
-        )
-        return lines

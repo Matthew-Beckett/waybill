@@ -55,7 +55,7 @@ for _mod_name, _mod in (
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = _mod
 
-from src.pipeline import _quality_key, _quality_order_reason  # noqa: E402 — after stub setup
+from src.plan import _quality_key, _quality_order_reason  # noqa: E402 — after stub setup
 from src.types.config import OrderStreamsBy  # noqa: E402
 
 
