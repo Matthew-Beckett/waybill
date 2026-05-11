@@ -12,12 +12,6 @@ def _empty_str_any_dict() -> dict[str, Any]:
 def _empty_str_list() -> list[str]:
     return []
 
-def _empty_fields() -> list["PluginField"]:
-    return []
-
-def _empty_actions() -> list["PluginAction"]:
-    return []
-
 class PluginFieldType(Enum):
     STRING = "string"
     NUMBER = "number"
@@ -52,7 +46,14 @@ class Plugin:
     version: str
     description: str
     author: str
-    configuration: WaybillConfig = field(default_factory=lambda: WaybillConfig(kind="", version="", metadata=ConfigMetadata(name=""), spec=ConfigSpec()))
+    configuration: WaybillConfig = field(
+        default_factory=lambda: WaybillConfig(
+            kind="WaybillConfig",
+            version="v1alpha1",
+            metadata=ConfigMetadata(name="plugin-default"),
+            spec=ConfigSpec(),
+        )
+    )
     fields: list[dict[str, Any]] = field(default_factory=_empty_any_list)
     actions: list[dict[str, Any]] = field(default_factory=_empty_any_list)
 
