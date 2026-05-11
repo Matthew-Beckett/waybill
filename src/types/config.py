@@ -54,10 +54,6 @@ class TransformerType(Enum):
     SET = "set"
 
 
-class CardinalDirection(Enum):
-    BOTH = "both"
-
-
 class CardinalOutputType(Enum):
     NUMBER = "number"
     WORD = "word"
@@ -77,7 +73,6 @@ class ConfigMetadata:
 class ConfigTransformer:
     type: TransformerType
     action: str = ""
-    direction: CardinalDirection | str = ""
     output_type: CardinalOutputType | str = ""
     pattern: str = ""
     replacement: str = ""
@@ -97,15 +92,6 @@ def _to_transformer(item: "ConfigTransformer | Mapping[str, Any]") -> "ConfigTra
     raw_type = item.get("type", "")
     transformer_type = raw_type if isinstance(raw_type, TransformerType) else TransformerType(str(raw_type))
 
-    raw_direction = item.get("direction", "")
-    direction: CardinalDirection | str
-    if isinstance(raw_direction, CardinalDirection):
-        direction = raw_direction
-    elif isinstance(raw_direction, str) and raw_direction:
-        direction = CardinalDirection(raw_direction)
-    else:
-        direction = ""
-
     raw_output_type = item.get("outputType", "")
     output_type: CardinalOutputType | str
     if isinstance(raw_output_type, CardinalOutputType):
@@ -118,7 +104,6 @@ def _to_transformer(item: "ConfigTransformer | Mapping[str, Any]") -> "ConfigTra
     known_keys = {
         "type",
         "action",
-        "direction",
         "outputType",
         "field",
         "pattern",
@@ -132,7 +117,6 @@ def _to_transformer(item: "ConfigTransformer | Mapping[str, Any]") -> "ConfigTra
     return ConfigTransformer(
         type=transformer_type,
         action=str(item.get("action", "")),
-        direction=direction,
         output_type=output_type,
         pattern=str(item.get("pattern", "")),
         replacement=str(item.get("replacement", "")),

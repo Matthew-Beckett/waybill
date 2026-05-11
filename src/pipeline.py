@@ -2,21 +2,17 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from copy import copy
-from typing import TYPE_CHECKING, Iterable
+from typing import Iterable
 
 from apps.channels.models import Stream
 
 from .matchers import build_matcher, build_q_filter
+from .matchers.base import WaybillMatcherBase
 from .transformers import build_transformer
 from .types.config import (
-    ConfigMatcher,
     ConfigMember,
     ConfigProfile,
-    ConfigTransformer,
-    MatcherAction,
-    MatcherType,
     OrderStreamsBy,
-    TransformerType,
     WaybillConfig,
 )
 from .types.plan import (
@@ -30,12 +26,6 @@ from .types.plan import (
     WaybillPlan,
 )
 
-if TYPE_CHECKING:
-    from .matchers.has_prefix import WaybillMatcherHasPrefix
-    from .matchers.regex import WaybillMatcherRegex
-    from .matchers.contains_any import WaybillMatcherContainsAny
-    from .matchers.exact_match import WaybillMatcherExactMatch
-
 CHUNK_SIZE = 1000
 
 
@@ -45,54 +35,6 @@ def _most_common(values: "Iterable[str | None]") -> "str | None":
     if not counts:
         return None
     return counts.most_common(1)[0][0]
-
-def _describe_matcher(cfg: ConfigMatcher) -> str:
-    suffix = f" \u2192 {cfg.action}" if cfg.action and cfg.action != "keep" else ""
-    match cfg.type:
-        case MatcherType.REGEX:
-            desc = f'regex on "{cfg.field}": {cfg.pattern}{suffix}'
-        case MatcherType.HAS_PREFIX:
-            prefixes = ", ".join(f'"{p}"' for p in cfg.prefixes)
-            desc = f'hasPrefix([{prefixes}]) on "{cfg.field}"{suffix}'
-        case MatcherType.CONTAINS_ANY:
-            substrings = ", ".join(f'"{s}"' for s in cfg.substrings)
-            cs = " (case-sensitive)" if cfg.case_sensitive else ""
-            desc = f'containsAny([{substrings}]) on "{cfg.field}"{cs}{suffix}'
-        case MatcherType.EXACT_MATCH:
-            values = ", ".join(f'"{v}"' for v in cfg.values)
-            cs = " (case-sensitive)" if cfg.case_sensitive else ""
-            desc = f'exactMatch([{values}]) on "{cfg.field}"{cs}{suffix}'
-        case _:
-            desc = str(cfg.type.value)
-    if cfg.transformers:
-        pre_descs = "; ".join(_describe_transformer(t) for t in cfg.transformers)
-        desc = f"[pre: {pre_descs}] {desc}"
-    return desc
-
-def _describe_transformer(cfg: ConfigTransformer) -> str:
-    if cfg.type == TransformerType.CONVERT_CARDINAL_NUMBERS:
-        direction = cfg.direction.value if hasattr(cfg.direction, "value") else str(cfg.direction)
-        output_type = cfg.output_type.value if hasattr(cfg.output_type, "value") else str(cfg.output_type)
-        parts = [p for p in [direction, f"\u2192 {output_type}" if output_type else ""] if p]
-        field_note = f' on "{cfg.field}"' if cfg.field and cfg.field != "name" else ""
-        return f'convertCardinalNumbers({" ".join(parts)}){field_note}'
-    if cfg.type == TransformerType.REGEX:
-        if cfg.action == "replace":
-            return f'regex "{cfg.pattern}" \u2192 "{cfg.replacement}"'
-        return f'regex "{cfg.pattern}" \u2192 {cfg.action}'
-    if cfg.type == TransformerType.STRIP:
-        parts: list[str] = []
-        if cfg.prefix:
-            parts.append(f'prefix="{cfg.prefix}"')
-        if cfg.suffix:
-            parts.append(f'suffix="{cfg.suffix}"')
-        field_note = f' on "{cfg.field}"' if cfg.field and cfg.field != "name" else ""
-        return f'strip({", ".join(parts)}){field_note}'
-    if cfg.type == TransformerType.SET:
-        field_note = f' on "{cfg.field}"' if cfg.field and cfg.field != "name" else ""
-        return f'set \u2192 "{cfg.value}"{field_note}'
-    return str(cfg.type.value)
-
 
 def _quality_key(stream_stats: "dict | None") -> "tuple[int, float]":
     """Return a (height, bitrate) sort key for quality ordering.
@@ -136,9 +78,7 @@ class MemberPipeline:
         self._member = member
         self._effective_stream_profile: str | None = member.stream_profile or inherited_stream_profile
         self._effective_order_streams_by: OrderStreamsBy | None = member.order_streams_by or inherited_order_streams_by
-        self._matchers: list[
-            WaybillMatcherRegex | WaybillMatcherHasPrefix | WaybillMatcherContainsAny | WaybillMatcherExactMatch
-        ] = [
+        self._matchers: list[WaybillMatcherBase] = [
             build_matcher(cfg) for cfg in member.matchers
         ]
         self._transformers = [build_transformer(cfg) for cfg in member.transformers]
@@ -150,8 +90,8 @@ class MemberPipeline:
         )
         if self._effective_order_streams_by is OrderStreamsBy.QUALITY:
             self._required_fields.add("stream_stats")
-        self._matcher_descs: list[str] = [_describe_matcher(cfg) for cfg in member.matchers]
-        self._transformer_descs: list[str] = [_describe_transformer(cfg) for cfg in member.transformers]
+        self._matcher_descs: list[str] = [m.describe() for m in self._matchers]
+        self._transformer_descs: list[str] = [t.describe() for t in self._transformers]
 
     def required_fields(self) -> set[str]:
         return self._required_fields

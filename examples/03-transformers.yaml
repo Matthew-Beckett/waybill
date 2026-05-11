@@ -79,7 +79,6 @@ spec:
 
             - name: Words to digits (outputType number)
               # Converts cardinal words to digits: "ONE" -> "1", "FOUR" -> "4", etc.
-              # direction: both converts in both directions before settling on outputType.
               matchers:
                 - type: regex
                   field: name
@@ -88,7 +87,6 @@ spec:
               transformers:
                 - type: convertCardinalNumbers
                   field: name
-                  direction: both
                   outputType: number
 
             - name: Digits to words (outputType word)
@@ -101,7 +99,6 @@ spec:
               transformers:
                 - type: convertCardinalNumbers
                   field: name
-                  direction: both
                   outputType: word
 
             - name: Cardinal conversion chained with regex (multi-step)
@@ -121,7 +118,6 @@ spec:
                   replacement: ""
                 - type: convertCardinalNumbers
                   field: name
-                  direction: both
                   outputType: number
                 - type: regex
                   field: name

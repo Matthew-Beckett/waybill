@@ -146,9 +146,6 @@ FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
     ),
     (ConfigTransformer, "type"): "Transformation algorithm",
     (ConfigTransformer, "action"): "Sub-action for the transformer (e.g. 'replace')",
-    (ConfigTransformer, "direction"): (
-        "Cardinal number conversion direction (type: convertCardinalNumbers)"
-    ),
     (ConfigTransformer, "output_type"): (
         "Target format for cardinal numbers — 'number' (e.g. 1) or 'word' (e.g. ONE) "
         "(type: convertCardinalNumbers)"

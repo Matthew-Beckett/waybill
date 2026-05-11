@@ -38,7 +38,6 @@ spec:
                   transformers:
                     - type: convertCardinalNumbers
                       field: name
-                      direction: both
                       outputType: number
               transformers:
                 - type: regex
@@ -48,7 +47,6 @@ spec:
                   replacement: ""
                 - type: convertCardinalNumbers
                   field: name
-                  direction: both
                   outputType: number
                 - type: regex
                   field: name
@@ -142,7 +140,6 @@ spec:
                       replacement: ""
                     - type: convertCardinalNumbers
                       field: name
-                      direction: both
                       outputType: number
               transformers:
                 - type: regex
@@ -152,5 +149,4 @@ spec:
                   replacement: ""
                 - type: convertCardinalNumbers
                   field: name
-                  direction: both
                   outputType: number

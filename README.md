@@ -157,7 +157,6 @@ Any matcher can carry a `transformers` list. These **pre-transformers** mutate t
   transformers:
     - type: convertCardinalNumbers
       field: name
-      direction: both
       outputType: number
 ```
 
@@ -229,13 +228,11 @@ Converts between digit and word forms of cardinal numbers (e.g. `ONE ↔ 1`).
 ```yaml
 - type: convertCardinalNumbers
   field: name
-  direction: both
   outputType: number
 ```
 
 | Field | Values | Description |
 |---|---|---|
-| `direction` | `both` | Detect either form as input |
 | `outputType` | `number`, `word` | Target form to normalise to |
 
 ---

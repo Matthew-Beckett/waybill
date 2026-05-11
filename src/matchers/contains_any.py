@@ -1,14 +1,6 @@
-from typing import TYPE_CHECKING
-
 from apps.channels.models import Stream
 
 from .base import WaybillMatcherBase
-
-if TYPE_CHECKING:
-    from ..transformers.convert_cardinal_numbers import WaybillTransformerConvertCardinalNumbers
-    from ..transformers.regex import WaybillTransformerRegex
-
-    AnyTransformer = WaybillTransformerRegex | WaybillTransformerConvertCardinalNumbers
 
 
 class WaybillMatcherContainsAny(WaybillMatcherBase):
@@ -20,13 +12,19 @@ class WaybillMatcherContainsAny(WaybillMatcherBase):
         field: str,
         action: str = "keep",
         case_sensitive: bool = False,
-        pre_transformers: "list[AnyTransformer] | None" = None,
+        pre_transformers=None,
     ):
         super().__init__(field=field, action=action, case_sensitive=case_sensitive, pre_transformers=pre_transformers)
+        self._display_substrings = substrings
         if case_sensitive:
             self._substrings = substrings
         else:
             self._substrings = [s.lower() for s in substrings]
+
+    def _describe_self(self) -> str:
+        substrings = ", ".join(f'"{s}"' for s in self._display_substrings)
+        cs = " (case-sensitive)" if self.case_sensitive else ""
+        return f'containsAny([{substrings}]) on "{self.field}"{cs}'
 
     def match(self, stream: Stream) -> bool:
         field_value = self._get_field_value(stream)

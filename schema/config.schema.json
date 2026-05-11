@@ -277,13 +277,6 @@
           "type": "string",
           "description": "Sub-action for the transformer (e.g. 'replace')"
         },
-        "direction": {
-          "type": "string",
-          "enum": [
-            "both"
-          ],
-          "description": "Cardinal number conversion direction (type: convertCardinalNumbers)"
-        },
         "outputType": {
           "type": "string",
           "enum": [

@@ -1,14 +1,6 @@
-from typing import TYPE_CHECKING
-
 from apps.channels.models import Stream
 
 from .base import WaybillMatcherBase
-
-if TYPE_CHECKING:
-    from ..transformers.convert_cardinal_numbers import WaybillTransformerConvertCardinalNumbers
-    from ..transformers.regex import WaybillTransformerRegex
-
-    AnyTransformer = WaybillTransformerRegex | WaybillTransformerConvertCardinalNumbers
 
 
 class WaybillMatcherHasPrefix(WaybillMatcherBase):
@@ -18,13 +10,19 @@ class WaybillMatcherHasPrefix(WaybillMatcherBase):
         field: str,
         action: str = "keep",
         case_sensitive: bool = False,
-        pre_transformers: "list[AnyTransformer] | None" = None,
+        pre_transformers=None,
     ):
         super().__init__(field=field, action=action, case_sensitive=case_sensitive, pre_transformers=pre_transformers)
+        self._display_prefixes = prefixes
         if case_sensitive:
             self._prefixes = prefixes
         else:
             self._prefixes = [p.lower() for p in prefixes]
+
+    def _describe_self(self) -> str:
+        prefixes = ", ".join(f'"{p}"' for p in self._display_prefixes)
+        cs = " (case-sensitive)" if self.case_sensitive else ""
+        return f'hasPrefix([{prefixes}]) on "{self.field}"{cs}'
 
     def match(self, stream: Stream) -> bool:
         field_value = self._get_field_value(stream)
