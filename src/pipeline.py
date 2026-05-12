@@ -31,10 +31,19 @@ CHUNK_SIZE = 1000
 class MemberPipeline:
     """Encapsulates matcher and transformer instances for a single ConfigMember."""
 
-    def __init__(self, member: ConfigMember, inherited_stream_profile: "str | None" = None, inherited_order_streams_by: "OrderStreamsBy | None" = None) -> None:
+    def __init__(
+        self,
+        member: ConfigMember,
+        inherited_stream_profile: "str | None" = None,
+        inherited_order_streams_by: "OrderStreamsBy | None" = None,
+    ) -> None:
         self._member = member
-        self._effective_stream_profile: str | None = member.stream_profile or inherited_stream_profile
-        self._effective_order_streams_by: OrderStreamsBy | None = member.order_streams_by or inherited_order_streams_by
+        self._effective_stream_profile: str | None = (
+            member.stream_profile or inherited_stream_profile
+        )
+        self._effective_order_streams_by: OrderStreamsBy | None = (
+            member.order_streams_by or inherited_order_streams_by
+        )
         self._matchers: list[WaybillMatcherBase] = [
             build_matcher(cfg) for cfg in member.matchers
         ]
@@ -75,14 +84,18 @@ class MemberPipeline:
 
         # Each group holds (stream_stats, StreamRecord); stream_stats is a raw dict captured
         # while the ORM object is still in scope and passed to the plan assembler.
-        groups: defaultdict[str, list[tuple["dict | None", StreamRecord]]] = defaultdict(list)
+        groups: defaultdict[str, list[tuple["dict | None", StreamRecord]]] = (
+            defaultdict(list)
+        )
         dropped_records: list[DroppedRecord] = []
 
-        transformer_pairs = list(zip(
-            self._transformers,
-            self._transformer_descs,
-            range(1, len(self._transformers) + 1),
-        ))
+        transformer_pairs = list(
+            zip(
+                self._transformers,
+                self._transformer_descs,
+                range(1, len(self._transformers) + 1),
+            )
+        )
 
         for stream in qs:
             # Precise Python match — guards against ORM iregex false positives
@@ -99,36 +112,44 @@ class MemberPipeline:
                 name_in = working.name
                 result = transformer.transform(working)
                 if result is None:
-                    steps.append(TransformStep(
+                    steps.append(
+                        TransformStep(
+                            transformer_index=idx,
+                            transformer_desc=desc,
+                            name_in=name_in,
+                            name_out=None,
+                        )
+                    )
+                    dropped_records.append(
+                        DroppedRecord(original_name=original_name, steps=steps)
+                    )
+                    was_dropped = True
+                    break
+                steps.append(
+                    TransformStep(
                         transformer_index=idx,
                         transformer_desc=desc,
                         name_in=name_in,
-                        name_out=None,
-                    ))
-                    dropped_records.append(DroppedRecord(original_name=original_name, steps=steps))
-                    was_dropped = True
-                    break
-                steps.append(TransformStep(
-                    transformer_index=idx,
-                    transformer_desc=desc,
-                    name_in=name_in,
-                    name_out=result.name,
-                ))
+                        name_out=result.name,
+                    )
+                )
                 working = result
 
             if not was_dropped:
                 stream_stats = getattr(stream, "stream_stats", None)
-                groups[working.name].append((
-                    stream_stats,
-                    StreamRecord(
-                        id=stream.pk,
-                        original_name=original_name,
-                        transformed_name=working.name,
-                        tvg_id=stream.tvg_id,
-                        logo_url=stream.logo_url,
-                        steps=steps,
-                    ),
-                ))
+                groups[working.name].append(
+                    (
+                        stream_stats,
+                        StreamRecord(
+                            id=stream.pk,
+                            original_name=original_name,
+                            transformed_name=working.name,
+                            tvg_id=stream.tvg_id,
+                            logo_url=stream.logo_url,
+                            steps=steps,
+                        ),
+                    )
+                )
 
         return assemble_member_plan(
             member_name=self._member.name,
@@ -144,12 +165,28 @@ class MemberPipeline:
 class GroupPipeline:
     """Encapsulates processing for a single ConfigGroup (→ Dispatcharr ChannelGroup)."""
 
-    def __init__(self, key: str, name: str, members: list[ConfigMember], inherited_stream_profile: "str | None" = None, group_stream_profile: "str | None" = None, inherited_order_streams_by: "OrderStreamsBy | None" = None, group_order_streams_by: "OrderStreamsBy | None" = None) -> None:
+    def __init__(
+        self,
+        key: str,
+        name: str,
+        members: list[ConfigMember],
+        inherited_stream_profile: "str | None" = None,
+        group_stream_profile: "str | None" = None,
+        inherited_order_streams_by: "OrderStreamsBy | None" = None,
+        group_order_streams_by: "OrderStreamsBy | None" = None,
+    ) -> None:
         self._key = key
         self._name = name
         effective_sp = group_stream_profile or inherited_stream_profile
         effective_osb = group_order_streams_by or inherited_order_streams_by
-        self._pipelines = [MemberPipeline(m, inherited_stream_profile=effective_sp, inherited_order_streams_by=effective_osb) for m in members]
+        self._pipelines = [
+            MemberPipeline(
+                m,
+                inherited_stream_profile=effective_sp,
+                inherited_order_streams_by=effective_osb,
+            )
+            for m in members
+        ]
 
     def process(self, chunk_size: int = CHUNK_SIZE) -> GroupPlan:
         return GroupPlan(
@@ -201,6 +238,3 @@ class WaybillPipeline:
             manifest_name=self._config.metadata.name,
             profiles=[p.process(chunk_size=chunk_size) for p in self._profiles],
         )
-
-
-

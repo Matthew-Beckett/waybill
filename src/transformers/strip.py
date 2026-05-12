@@ -14,7 +14,7 @@ class WaybillTransformerStrip(WaybillTransformerBase):
     def transform(self, stream: Stream) -> Stream | None:
         value = getattr(stream, self.field)
         if self.prefix and value.startswith(self.prefix):
-            value = value[len(self.prefix):]
+            value = value[len(self.prefix) :]
         if self.suffix and value.endswith(self.suffix):
             value = value[: -len(self.suffix)]
         setattr(stream, self.field, value)
@@ -27,4 +27,4 @@ class WaybillTransformerStrip(WaybillTransformerBase):
         if self.suffix:
             parts.append(f'suffix="{self.suffix}"')
         field_note = f' on "{self.field}"' if self.field != "name" else ""
-        return f'strip({(", ").join(parts)}){field_note}'
+        return f"strip({(', ').join(parts)}){field_note}"

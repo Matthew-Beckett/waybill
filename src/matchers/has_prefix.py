@@ -12,7 +12,12 @@ class WaybillMatcherHasPrefix(WaybillMatcherBase):
         case_sensitive: bool = False,
         pre_transformers=None,
     ):
-        super().__init__(field=field, action=action, case_sensitive=case_sensitive, pre_transformers=pre_transformers)
+        super().__init__(
+            field=field,
+            action=action,
+            case_sensitive=case_sensitive,
+            pre_transformers=pre_transformers,
+        )
         self._display_prefixes = prefixes
         if case_sensitive:
             self._prefixes = prefixes

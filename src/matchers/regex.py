@@ -14,7 +14,12 @@ class WaybillMatcherRegex(WaybillMatcherBase):
         case_sensitive: bool = False,
         pre_transformers=None,
     ):
-        super().__init__(field=field, action=action, case_sensitive=case_sensitive, pre_transformers=pre_transformers)
+        super().__init__(
+            field=field,
+            action=action,
+            case_sensitive=case_sensitive,
+            pre_transformers=pre_transformers,
+        )
         self.pattern = pattern
 
     def _describe_self(self) -> str:

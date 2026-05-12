@@ -1,5 +1,4 @@
 from ..types.config import ConfigTransformer, TransformerType
-from .base import WaybillTransformerBase
 from .convert_cardinal_numbers import WaybillTransformerConvertCardinalNumbers
 from .regex import WaybillTransformerRegex
 from .set import WaybillTransformerSet
@@ -16,17 +15,28 @@ AnyTransformer = (
 def build_transformer(cfg: ConfigTransformer) -> AnyTransformer:
     """Instantiate the concrete transformer for a ConfigTransformer."""
     if cfg.type == TransformerType.REGEX:
-        return WaybillTransformerRegex(pattern=cfg.pattern, action=cfg.action, replacement=cfg.replacement, field=cfg.field)
+        return WaybillTransformerRegex(
+            pattern=cfg.pattern,
+            action=cfg.action,
+            replacement=cfg.replacement,
+            field=cfg.field,
+        )
 
     if cfg.type == TransformerType.CONVERT_CARDINAL_NUMBERS:
-        output_type = cfg.output_type.value if hasattr(cfg.output_type, "value") else str(cfg.output_type)
+        output_type = (
+            cfg.output_type.value
+            if hasattr(cfg.output_type, "value")
+            else str(cfg.output_type)
+        )
         return WaybillTransformerConvertCardinalNumbers(
             output_type=output_type,
             field=cfg.field,
         )
 
     if cfg.type == TransformerType.STRIP:
-        return WaybillTransformerStrip(field=cfg.field, prefix=cfg.prefix, suffix=cfg.suffix)
+        return WaybillTransformerStrip(
+            field=cfg.field, prefix=cfg.prefix, suffix=cfg.suffix
+        )
 
     if cfg.type == TransformerType.SET:
         return WaybillTransformerSet(value=cfg.value, field=cfg.field)

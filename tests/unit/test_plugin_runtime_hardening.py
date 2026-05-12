@@ -37,7 +37,9 @@ def _load_plugin_module_with_stubs() -> types.ModuleType:
         def __init__(self, cast: list[object] | None = None) -> None:
             self.cast = cast or []
 
-    def from_dict(data_class: type[object], data: dict[str, object], config: object | None = None) -> object:
+    def from_dict(
+        data_class: type[object], data: dict[str, object], config: object | None = None
+    ) -> object:
         del config
         return data_class(**data)
 

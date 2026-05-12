@@ -9,7 +9,9 @@ _BACKREF_PATTERN = re.compile(r"\$(\d+)")
 
 
 class WaybillTransformerRegex(WaybillTransformerBase):
-    def __init__(self, pattern: str, action: str, replacement: str = "", field: str = "name"):
+    def __init__(
+        self, pattern: str, action: str, replacement: str = "", field: str = "name"
+    ):
         self.pattern = pattern
         self.action = action
         self.replacement = _BACKREF_PATTERN.sub(r"\\\1", replacement)
@@ -18,9 +20,17 @@ class WaybillTransformerRegex(WaybillTransformerBase):
     def transform(self, stream: Stream) -> Stream | None:
         match self.action:
             case "drop":
-                return None if re.search(self.pattern, getattr(stream, self.field)) else stream
+                return (
+                    None
+                    if re.search(self.pattern, getattr(stream, self.field))
+                    else stream
+                )
             case "replace":
-                setattr(stream, self.field, re.sub(self.pattern, self.replacement, getattr(stream, self.field)))
+                setattr(
+                    stream,
+                    self.field,
+                    re.sub(self.pattern, self.replacement, getattr(stream, self.field)),
+                )
                 return stream
             case _:
                 raise ValueError(f"Unknown regex action: {self.action!r}")

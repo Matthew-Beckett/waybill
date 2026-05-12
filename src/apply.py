@@ -4,7 +4,14 @@ from typing import TYPE_CHECKING, Protocol
 
 from django.db import transaction
 
-from apps.channels.models import Channel, ChannelGroup, ChannelProfile, ChannelProfileMembership, ChannelStream, Logo
+from apps.channels.models import (
+    Channel,
+    ChannelGroup,
+    ChannelProfile,
+    ChannelProfileMembership,
+    ChannelStream,
+    Logo,
+)
 from apps.epg.models import EPGData
 from core.models import StreamProfile
 
@@ -41,18 +48,28 @@ class WaybillApplier:
 
         with transaction.atomic():
             for profile in self._plan.profiles:
-                channel_profile, profile_created = ChannelProfile.objects.get_or_create(name=profile.key)
+                channel_profile, profile_created = ChannelProfile.objects.get_or_create(
+                    name=profile.key
+                )
                 if profile_created:
-                    self._logger.info(f"[apply] Created channel profile: {profile.key!r}")
+                    self._logger.info(
+                        f"[apply] Created channel profile: {profile.key!r}"
+                    )
                     # Dispatcharr's post_save signal auto-adds every existing channel to a new
                     # profile with enabled=True. Disable them so only manifest channels are enabled.
-                    ChannelProfileMembership.objects.filter(channel_profile=channel_profile).update(enabled=False)
+                    ChannelProfileMembership.objects.filter(
+                        channel_profile=channel_profile
+                    ).update(enabled=False)
 
                 for plan_group in profile.groups:
-                    group, group_created = ChannelGroup.objects.get_or_create(name=plan_group.name)
+                    group, group_created = ChannelGroup.objects.get_or_create(
+                        name=plan_group.name
+                    )
                     if group_created:
                         summary["groups_created"] += 1
-                        self._logger.info(f"[apply] Created channel group: {plan_group.name!r}")
+                        self._logger.info(
+                            f"[apply] Created channel group: {plan_group.name!r}"
+                        )
 
                     if self._mode == _MODE_OVERWRITE:
                         plan_channel_names = {
@@ -60,9 +77,9 @@ class WaybillApplier:
                             for member in plan_group.members
                             for channel in member.channels
                         }
-                        deleted_qs = Channel.objects.filter(channel_group=group).exclude(
-                            name__in=plan_channel_names
-                        )
+                        deleted_qs = Channel.objects.filter(
+                            channel_group=group
+                        ).exclude(name__in=plan_channel_names)
                         deleted_count, _ = deleted_qs.delete()
                         if deleted_count:
                             summary["channels_deleted"] += deleted_count
@@ -122,7 +139,9 @@ class WaybillApplier:
         epg_data = self._resolve_epg_data(channel_plan.epg_id)
 
         new_logo_id: int | None = logo.pk if logo else None
-        new_stream_profile_id: int | None = stream_profile.pk if stream_profile else None
+        new_stream_profile_id: int | None = (
+            stream_profile.pk if stream_profile else None
+        )
         new_epg_data_id: int | None = epg_data.pk if epg_data else None
 
         channel, created = Channel.objects.get_or_create(
@@ -157,7 +176,14 @@ class WaybillApplier:
                 channel.stream_profile_id = new_stream_profile_id
                 changed = True
             if changed:
-                channel.save(update_fields=["tvg_id", "logo_id", "epg_data_id", "stream_profile_id"])
+                channel.save(
+                    update_fields=[
+                        "tvg_id",
+                        "logo_id",
+                        "epg_data_id",
+                        "stream_profile_id",
+                    ]
+                )
                 self._logger.info(
                     f"[apply] Updated channel: {channel_plan.name!r} in group {group.name!r}"
                 )
@@ -192,8 +218,6 @@ class WaybillApplier:
 
 
 class LoggerProtocol(Protocol):
-    def info(self, message: str) -> None:
-        ...
+    def info(self, message: str) -> None: ...
 
-    def warning(self, message: str) -> None:
-        ...
+    def warning(self, message: str) -> None: ...

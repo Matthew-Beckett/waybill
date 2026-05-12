@@ -1,20 +1,26 @@
 from django.db.models import Q
 
 from ..types.config import ConfigMatcher, MatcherAction, MatcherType
-from .base import WaybillMatcherBase
 from .contains_any import WaybillMatcherContainsAny
 from .exact_match import WaybillMatcherExactMatch
 from .has_prefix import WaybillMatcherHasPrefix
 from .regex import WaybillMatcherRegex
 
-AnyMatcher = WaybillMatcherRegex | WaybillMatcherHasPrefix | WaybillMatcherContainsAny | WaybillMatcherExactMatch
+AnyMatcher = (
+    WaybillMatcherRegex
+    | WaybillMatcherHasPrefix
+    | WaybillMatcherContainsAny
+    | WaybillMatcherExactMatch
+)
 
 
 def build_matcher(cfg: ConfigMatcher) -> AnyMatcher:
     """Instantiate the concrete matcher for a ConfigMatcher."""
     from ..transformers import build_transformer
 
-    action = cfg.action.value if isinstance(cfg.action, MatcherAction) else str(cfg.action)
+    action = (
+        cfg.action.value if isinstance(cfg.action, MatcherAction) else str(cfg.action)
+    )
     pre_transformers = [build_transformer(t) for t in cfg.transformers]
 
     if cfg.type == MatcherType.REGEX:

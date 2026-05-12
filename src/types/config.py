@@ -84,13 +84,19 @@ class ConfigTransformer:
     field: str = "name"
 
 
-def _to_transformer(item: "ConfigTransformer | Mapping[str, Any]") -> "ConfigTransformer":
+def _to_transformer(
+    item: "ConfigTransformer | Mapping[str, Any]",
+) -> "ConfigTransformer":
     """Coerce a raw mapping (from YAML) or an existing ConfigTransformer into a ConfigTransformer."""
     if isinstance(item, ConfigTransformer):
         return item
 
     raw_type = item.get("type", "")
-    transformer_type = raw_type if isinstance(raw_type, TransformerType) else TransformerType(str(raw_type))
+    transformer_type = (
+        raw_type
+        if isinstance(raw_type, TransformerType)
+        else TransformerType(str(raw_type))
+    )
 
     raw_output_type = item.get("outputType", "")
     output_type: CardinalOutputType | str
@@ -172,28 +178,50 @@ class ConfigMember:
             return item
 
         raw_type = item.get("type", MatcherType.REGEX)
-        matcher_type = raw_type if isinstance(raw_type, MatcherType) else MatcherType(str(raw_type))
+        matcher_type = (
+            raw_type
+            if isinstance(raw_type, MatcherType)
+            else MatcherType(str(raw_type))
+        )
 
         raw_action = item.get("action", MatcherAction.KEEP)
         matcher_action: MatcherAction
         if isinstance(raw_action, MatcherAction):
             matcher_action = raw_action
         else:
-            matcher_action = MatcherAction(str(raw_action)) if raw_action else MatcherAction.KEEP
+            matcher_action = (
+                MatcherAction(str(raw_action)) if raw_action else MatcherAction.KEEP
+            )
 
         raw_prefixes = item.get("prefixes", [])
-        prefixes = [str(p) for p in cast(list[Any], raw_prefixes)] if isinstance(raw_prefixes, list) else _empty_str_list()
+        prefixes = (
+            [str(p) for p in cast(list[Any], raw_prefixes)]
+            if isinstance(raw_prefixes, list)
+            else _empty_str_list()
+        )
 
         raw_substrings = item.get("substrings", [])
-        substrings = [str(s) for s in cast(list[Any], raw_substrings)] if isinstance(raw_substrings, list) else _empty_str_list()
+        substrings = (
+            [str(s) for s in cast(list[Any], raw_substrings)]
+            if isinstance(raw_substrings, list)
+            else _empty_str_list()
+        )
 
         raw_values = item.get("values", [])
-        values = [str(v) for v in cast(list[Any], raw_values)] if isinstance(raw_values, list) else _empty_str_list()
+        values = (
+            [str(v) for v in cast(list[Any], raw_values)]
+            if isinstance(raw_values, list)
+            else _empty_str_list()
+        )
 
         case_sensitive = bool(item.get("caseSensitive", False))
 
         raw_transformers = item.get("transformers", [])
-        transformers = cast(list[ConfigTransformer], raw_transformers) if isinstance(raw_transformers, list) else _empty_transformers()
+        transformers = (
+            cast(list[ConfigTransformer], raw_transformers)
+            if isinstance(raw_transformers, list)
+            else _empty_transformers()
+        )
 
         return ConfigMatcher(
             type=matcher_type,
@@ -226,8 +254,16 @@ class ConfigGroup:
         raw_matchers = item.get("matchers", [])
         raw_transformers = item.get("transformers", [])
 
-        matchers = cast(list[ConfigMatcher], raw_matchers) if isinstance(raw_matchers, list) else _empty_matchers()
-        transformers = cast(list[ConfigTransformer], raw_transformers) if isinstance(raw_transformers, list) else _empty_transformers()
+        matchers = (
+            cast(list[ConfigMatcher], raw_matchers)
+            if isinstance(raw_matchers, list)
+            else _empty_matchers()
+        )
+        transformers = (
+            cast(list[ConfigTransformer], raw_transformers)
+            if isinstance(raw_transformers, list)
+            else _empty_transformers()
+        )
 
         return ConfigMember(
             name=str(item.get("name", "")),
@@ -246,7 +282,9 @@ class ConfigProfile:
     order_streams_by: OrderStreamsBy | None = None
 
     def __post_init__(self):
-        self.groups = {name: self._to_group(value) for name, value in self.groups.items()}
+        self.groups = {
+            name: self._to_group(value) for name, value in self.groups.items()
+        }
 
     @staticmethod
     def _to_group(item: ConfigGroup | Mapping[str, Any]) -> ConfigGroup:
@@ -254,7 +292,11 @@ class ConfigProfile:
             return item
 
         raw_members = item.get("members", [])
-        members = cast(list[ConfigMember], raw_members) if isinstance(raw_members, list) else _empty_members()
+        members = (
+            cast(list[ConfigMember], raw_members)
+            if isinstance(raw_members, list)
+            else _empty_members()
+        )
 
         return ConfigGroup(
             name=str(item.get("name", "")),
@@ -269,7 +311,9 @@ class ConfigSpec:
     profiles: dict[str, ConfigProfile] = field(default_factory=_empty_str_profile_dict)
 
     def __post_init__(self):
-        self.profiles = {name: self._to_profile(value) for name, value in self.profiles.items()}
+        self.profiles = {
+            name: self._to_profile(value) for name, value in self.profiles.items()
+        }
 
     @staticmethod
     def _to_profile(item: ConfigProfile | Mapping[str, Any]) -> ConfigProfile:
@@ -277,7 +321,11 @@ class ConfigSpec:
             return item
 
         raw_groups = item.get("groups", {})
-        groups = cast(dict[str, ConfigGroup], raw_groups) if isinstance(raw_groups, dict) else _empty_str_group_dict()
+        groups = (
+            cast(dict[str, ConfigGroup], raw_groups)
+            if isinstance(raw_groups, dict)
+            else _empty_str_group_dict()
+        )
 
         return ConfigProfile(
             name=str(item.get("name", "")),
@@ -324,6 +372,10 @@ class WaybillConfig:
             return item
 
         raw_profiles = item.get("profiles", {})
-        profiles = cast(dict[str, ConfigProfile], raw_profiles) if isinstance(raw_profiles, dict) else _empty_str_profile_dict()
+        profiles = (
+            cast(dict[str, ConfigProfile], raw_profiles)
+            if isinstance(raw_profiles, dict)
+            else _empty_str_profile_dict()
+        )
 
         return ConfigSpec(profiles=profiles)

@@ -3,14 +3,18 @@ from enum import Enum as Enum
 from typing import Any, Mapping, cast
 from .config import ConfigMetadata, ConfigSpec, WaybillConfig
 
+
 def _empty_any_list() -> list[Any]:
     return []
+
 
 def _empty_str_any_dict() -> dict[str, Any]:
     return {}
 
+
 def _empty_str_list() -> list[str]:
     return []
+
 
 class PluginFieldType(Enum):
     STRING = "string"
@@ -20,6 +24,7 @@ class PluginFieldType(Enum):
     TEXT = "text"
     INFO = "info"
 
+
 @dataclass(frozen=True)
 class PluginField:
     id: str
@@ -28,6 +33,7 @@ class PluginField:
     default: object = None
     description: str = ""
     options: list[Any] = field(default_factory=_empty_any_list)
+
 
 @dataclass(frozen=True)
 class PluginAction:
@@ -39,6 +45,7 @@ class PluginAction:
     button_variant: str = ""
     button_color: str = ""
     events: list[str] = field(default_factory=_empty_str_list)
+
 
 @dataclass
 class Plugin:
@@ -66,10 +73,18 @@ class Plugin:
             return item
 
         raw_type = item.get("type", PluginFieldType.STRING)
-        field_type = raw_type if isinstance(raw_type, PluginFieldType) else PluginFieldType(str(raw_type))
+        field_type = (
+            raw_type
+            if isinstance(raw_type, PluginFieldType)
+            else PluginFieldType(str(raw_type))
+        )
 
         raw_options = item.get("options", [])
-        options = cast(list[Any], raw_options) if isinstance(raw_options, list) else _empty_any_list()
+        options = (
+            cast(list[Any], raw_options)
+            if isinstance(raw_options, list)
+            else _empty_any_list()
+        )
 
         return PluginField(
             id=str(item.get("id", "")),
@@ -86,10 +101,18 @@ class Plugin:
             return item
 
         raw_confirm = item.get("confirm", {})
-        confirm = cast(dict[str, Any], raw_confirm) if isinstance(raw_confirm, dict) else _empty_str_any_dict()
+        confirm = (
+            cast(dict[str, Any], raw_confirm)
+            if isinstance(raw_confirm, dict)
+            else _empty_str_any_dict()
+        )
 
         raw_events = item.get("events", [])
-        events = [str(event) for event in cast(list[Any], raw_events)] if isinstance(raw_events, list) else _empty_str_list()
+        events = (
+            [str(event) for event in cast(list[Any], raw_events)]
+            if isinstance(raw_events, list)
+            else _empty_str_list()
+        )
 
         return PluginAction(
             id=str(item.get("id", "")),

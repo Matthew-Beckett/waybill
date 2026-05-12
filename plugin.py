@@ -2,7 +2,9 @@ import os
 import sys
 
 # Dirty hack to bring our own vendored dependencies without interfering with the host's Python environment
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src", "vendor"))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src", "vendor")
+)
 
 import json
 import yaml
@@ -34,14 +36,11 @@ class WaybillActionError(WaybillError):
 
 
 class WaybillLogger(Protocol):
-    def info(self, message: str) -> None:
-        ...
+    def info(self, message: str) -> None: ...
 
-    def warning(self, message: str) -> None:
-        ...
+    def warning(self, message: str) -> None: ...
 
-    def error(self, message: str) -> None:
-        ...
+    def error(self, message: str) -> None: ...
 
 
 class Plugin(DispatcharrPlugin):
@@ -55,7 +54,7 @@ class Plugin(DispatcharrPlugin):
             description=plugin.description,
             author=plugin.author,
             fields=plugin.fields,
-            actions=plugin.actions
+            actions=plugin.actions,
         )
 
         return None
@@ -91,7 +90,9 @@ class Plugin(DispatcharrPlugin):
 
         manifest_value = config_data.get("manifest", "")
         if not isinstance(manifest_value, str) or not manifest_value.strip():
-            raise WaybillConfigurationError("Configuration manifest is empty or missing")
+            raise WaybillConfigurationError(
+                "Configuration manifest is empty or missing"
+            )
 
         try:
             parsed = yaml.safe_load(manifest_value)
@@ -141,10 +142,10 @@ class Plugin(DispatcharrPlugin):
             apply_mode = settings_dict.get("apply_mode")
         param_mode = params.get("mode")
         mode = (
-            param_mode if isinstance(param_mode, str) and param_mode else None
-        ) or (
-            apply_mode if isinstance(apply_mode, str) and apply_mode else None
-        ) or "upsert"
+            (param_mode if isinstance(param_mode, str) and param_mode else None)
+            or (apply_mode if isinstance(apply_mode, str) and apply_mode else None)
+            or "upsert"
+        )
         pipeline = WaybillPipeline(self.configuration)
         plan = pipeline.compute_plan()
         applier = WaybillApplier(plan, mode, logger)

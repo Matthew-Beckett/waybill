@@ -12,10 +12,6 @@ from __future__ import annotations
 import pytest
 
 from src.types.config import (
-    ConfigGroup,
-    ConfigMember,
-    ConfigProfile,
-    ConfigSpec,
     OrderStreamsBy,
     WaybillConfig,
 )
@@ -145,6 +141,11 @@ def test_group_null_clears_profile_value() -> None:
 
 def test_member_re_enables_when_group_cleared() -> None:
     """Member sets quality even though the group cleared the inherited value."""
-    cfg = _make_config(_profile_dict(profile_osb="quality", group_osb=None, member_osb="quality"))
+    cfg = _make_config(
+        _profile_dict(profile_osb="quality", group_osb=None, member_osb="quality")
+    )
     assert cfg.spec.profiles["p"].groups["g"].order_streams_by is None
-    assert cfg.spec.profiles["p"].groups["g"].members[0].order_streams_by is OrderStreamsBy.QUALITY
+    assert (
+        cfg.spec.profiles["p"].groups["g"].members[0].order_streams_by
+        is OrderStreamsBy.QUALITY
+    )

@@ -16,7 +16,6 @@ import sys
 import types
 from types import SimpleNamespace
 
-import pytest
 
 # Stub out the Django ORM before importing pipeline
 

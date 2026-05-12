@@ -5,7 +5,13 @@ from dataclasses import replace
 from typing import Iterable
 
 from .types.config import OrderStreamsBy
-from .types.plan import ChannelPlan, DroppedRecord, MemberPlan, StreamRecord, WaybillPlan
+from .types.plan import (
+    ChannelPlan,
+    DroppedRecord,
+    MemberPlan,
+    StreamRecord,
+    WaybillPlan,
+)
 
 
 def _most_common(values: "Iterable[str | None]") -> "str | None":
@@ -26,7 +32,11 @@ def _quality_key(stream_stats: "dict | None") -> "tuple[int, float]":
         return (0, 0.0)
     resolution = stream_stats.get("resolution", "")
     try:
-        height = int(str(resolution).split("x")[1]) if resolution and "x" in str(resolution) else 0
+        height = (
+            int(str(resolution).split("x")[1])
+            if resolution and "x" in str(resolution)
+            else 0
+        )
     except (IndexError, ValueError):
         height = 0
     try:
@@ -64,7 +74,13 @@ def assemble_member_plan(
     needs_quality = effective_order_streams_by is OrderStreamsBy.QUALITY
     channels = sorted(
         (
-            _assemble_channel_plan(name, entries, effective_stream_profile, effective_order_streams_by, needs_quality)
+            _assemble_channel_plan(
+                name,
+                entries,
+                effective_stream_profile,
+                effective_order_streams_by,
+                needs_quality,
+            )
             for name, entries in raw_groups.items()
         ),
         key=lambda c: c.name,
@@ -132,18 +148,32 @@ class WaybillPlanFormatter:
                         if channel.logo_url:
                             lines.append(f"        Logo:   {channel.logo_url}")
                         if channel.stream_profile:
-                            lines.append(f"        Stream Profile: {channel.stream_profile}")
+                            lines.append(
+                                f"        Stream Profile: {channel.stream_profile}"
+                            )
                         if channel.order_streams_by:
-                            lines.append(f"        Order Streams By: {channel.order_streams_by.value}")
+                            lines.append(
+                                f"        Order Streams By: {channel.order_streams_by.value}"
+                            )
                         for stream in channel.streams:
                             if stream.original_name != stream.transformed_name:
-                                suffix = f"  [{stream.order_reason}]" if stream.order_reason else ""
+                                suffix = (
+                                    f"  [{stream.order_reason}]"
+                                    if stream.order_reason
+                                    else ""
+                                )
                                 lines.append(
                                     f'        "{stream.original_name}"  \u2192  "{stream.transformed_name}"{suffix}'
                                 )
                             else:
-                                suffix = f"  [{stream.order_reason}]" if stream.order_reason else ""
-                                lines.append(f'        "{stream.original_name}"{suffix}')
+                                suffix = (
+                                    f"  [{stream.order_reason}]"
+                                    if stream.order_reason
+                                    else ""
+                                )
+                                lines.append(
+                                    f'        "{stream.original_name}"{suffix}'
+                                )
                             for step in stream.steps:
                                 if step.name_in != step.name_out:
                                     lines.append(
@@ -158,7 +188,9 @@ class WaybillPlanFormatter:
                                     f'        "{rec.original_name}"  →  dropped by [T{drop_step.transformer_index}]: {drop_step.transformer_desc}'
                                 )
                             else:
-                                lines.append(f'        "{rec.original_name}"  →  dropped')
+                                lines.append(
+                                    f'        "{rec.original_name}"  →  dropped'
+                                )
                             for step in rec.steps[:-1]:
                                 if step.name_in != step.name_out:
                                     lines.append(

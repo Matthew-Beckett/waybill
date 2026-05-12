@@ -94,7 +94,10 @@ def build_editable(wheel_directory, config_settings=None, metadata_directory=Non
             f"{dist_info}/METADATA",
             f"Metadata-Version: 2.1\nName: waybill\nVersion: {version}\n",
         )
-        zf.writestr(f"{dist_info}/WHEEL", "Wheel-Version: 1.0\nGenerator: _build_backend\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
+        zf.writestr(
+            f"{dist_info}/WHEEL",
+            "Wheel-Version: 1.0\nGenerator: _build_backend\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+        )
         zf.writestr(f"{dist_info}/RECORD", "")
 
     return whl_name

@@ -14,6 +14,7 @@ VS Code — add to .vscode/settings.json:
         "./schema/config.schema.json": ["config.yaml", "config.*.yaml"]
     }
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -36,7 +37,6 @@ from src.types.config import (
     ConfigProfile,
     ConfigSpec,
     ConfigTransformer,
-    OrderStreamsBy,
     WaybillConfig,
 )
 
@@ -125,7 +125,10 @@ FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
     (ConfigMember, "transformers"): "Ordered transformers applied to matched streams",
     (ConfigMatcher, "type"): "Matching algorithm",
     (ConfigMatcher, "action"): "Whether matched streams are kept or dropped",
-    (ConfigMatcher, "pattern"): "Regex pattern to test against the target field (type: regex)",
+    (
+        ConfigMatcher,
+        "pattern",
+    ): "Regex pattern to test against the target field (type: regex)",
     (ConfigMatcher, "prefixes"): (
         "One or more prefixes; the stream matches if its field starts with any of them "
         "(type: hasPrefix)"
@@ -139,7 +142,10 @@ FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
         "(type: exactMatch)"
     ),
     (ConfigMatcher, "case_sensitive"): "Whether string comparison is case-sensitive",
-    (ConfigMatcher, "field"): "Stream field to evaluate against (e.g. 'name', 'tvg_id')",
+    (
+        ConfigMatcher,
+        "field",
+    ): "Stream field to evaluate against (e.g. 'name', 'tvg_id')",
     (ConfigMatcher, "transformers"): (
         "Transformers applied to the field value before this matcher evaluates; "
         "useful for canonicalising the value before matching"
@@ -198,11 +204,17 @@ def _py_type_to_schema(py_type: Any) -> dict[str, Any]:
                 # without collapsing the enum values.
                 if "enum" in inner:
                     return {"oneOf": [inner, {"type": "null"}]}
-                return {"type": [inner["type"], "null"]} if "type" in inner else {"oneOf": [inner, {"type": "null"}]}
+                return (
+                    {"type": [inner["type"], "null"]}
+                    if "type" in inner
+                    else {"oneOf": [inner, {"type": "null"}]}
+                )
             return inner
 
         # Multiple non-None types — e.g. CardinalDirection | str
-        enum_types = [a for a in non_none if isinstance(a, type) and issubclass(a, Enum)]
+        enum_types = [
+            a for a in non_none if isinstance(a, type) and issubclass(a, Enum)
+        ]
         str_types = [a for a in non_none if a is str]
         if enum_types and str_types:
             # Represent as enum; the str branch is the unset/empty fallback.
@@ -252,6 +264,7 @@ def _has_default(f: dataclasses.Field) -> bool:  # type: ignore[type-arg]
         f.default is not dataclasses.MISSING
         or f.default_factory is not dataclasses.MISSING  # type: ignore[misc]
     )
+
 
 def _dataclass_to_schema(cls: type) -> dict[str, Any]:
     hints = typing.get_type_hints(cls)

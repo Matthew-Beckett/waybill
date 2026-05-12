@@ -49,7 +49,9 @@ class WaybillMatcherBase(ABC):
 
     def describe(self) -> str:
         """Return a human-readable description of this matcher, including action and pre-transformers."""
-        suffix = f" \u2192 {self.action}" if self.action and self.action != "keep" else ""
+        suffix = (
+            f" \u2192 {self.action}" if self.action and self.action != "keep" else ""
+        )
         desc = f"{self._describe_self()}{suffix}"
         if self.pre_transformers:
             pre_descs = "; ".join(t.describe() for t in self.pre_transformers)
