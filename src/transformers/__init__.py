@@ -2,6 +2,7 @@ from ..types.config import ConfigTransformer, TransformerType
 from .convert_cardinal_numbers import WaybillTransformerConvertCardinalNumbers
 from .regex import WaybillTransformerRegex
 from .set import WaybillTransformerSet
+from .set_metadata import WaybillTransformerSetMetadata
 from .strip import WaybillTransformerStrip
 
 AnyTransformer = (
@@ -9,6 +10,7 @@ AnyTransformer = (
     | WaybillTransformerConvertCardinalNumbers
     | WaybillTransformerStrip
     | WaybillTransformerSet
+    | WaybillTransformerSetMetadata
 )
 
 
@@ -40,5 +42,12 @@ def build_transformer(cfg: ConfigTransformer) -> AnyTransformer:
 
     if cfg.type == TransformerType.SET:
         return WaybillTransformerSet(value=cfg.value, field=cfg.field)
+
+    if cfg.type == TransformerType.SET_METADATA:
+        return WaybillTransformerSetMetadata(
+            name=cfg.name,
+            logo_url=cfg.logo_url,
+            tvg_id=cfg.tvg_id,
+        )
 
     raise ValueError(f"Unknown transformer type: {cfg.type!r}")

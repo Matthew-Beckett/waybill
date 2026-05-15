@@ -44,6 +44,8 @@ from src.types.config import (
 YAML_KEY: dict[tuple[type, str], str] = {
     (ConfigMatcher, "case_sensitive"): "caseSensitive",
     (ConfigTransformer, "output_type"): "outputType",
+    (ConfigTransformer, "logo_url"): "logoUrl",
+    (ConfigTransformer, "tvg_id"): "tvgId",
     (ConfigProfile, "stream_profile"): "streamProfile",
     (ConfigGroup, "stream_profile"): "streamProfile",
     (ConfigMember, "stream_profile"): "streamProfile",
@@ -83,7 +85,7 @@ CLASS_DESCRIPTIONS: dict[type, str] = {
         "matchers run in order and can keep or drop streams"
     ),
     ConfigTransformer: (
-        "A mutation rule applied to a stream field value; "
+        "A mutation rule applied to a stream field value or explicit metadata fields; "
         "transformers run in order after all matchers pass"
     ),
 }
@@ -162,7 +164,13 @@ FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
     ),
     (ConfigTransformer, "prefix"): "Prefix to add or strip",
     (ConfigTransformer, "suffix"): "Suffix to add or strip",
-    (ConfigTransformer, "value"): "Static value to assign to the field (type: set)",
+    (ConfigTransformer, "value"): (
+        "Static value to assign to the field (type: set). "
+        "Use as a low-level escape hatch for unusual requirements"
+    ),
+    (ConfigTransformer, "name"): "Name value to assign (type: setMetadata)",
+    (ConfigTransformer, "logo_url"): "Logo URL value to assign (type: setMetadata)",
+    (ConfigTransformer, "tvg_id"): "TVG ID value to assign (type: setMetadata)",
     (ConfigTransformer, "field"): "Stream field to transform (e.g. 'name', 'tvg_id')",
 }
 

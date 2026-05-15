@@ -261,7 +261,7 @@
     },
     "ConfigTransformer": {
       "type": "object",
-      "description": "A mutation rule applied to a stream field value; transformers run in order after all matchers pass",
+      "description": "A mutation rule applied to a stream field value or explicit metadata fields; transformers run in order after all matchers pass",
       "properties": {
         "type": {
           "type": "string",
@@ -269,7 +269,8 @@
             "convertCardinalNumbers",
             "regex",
             "strip",
-            "set"
+            "set",
+            "setMetadata"
           ],
           "description": "Transformation algorithm"
         },
@@ -303,7 +304,19 @@
         },
         "value": {
           "type": "string",
-          "description": "Static value to assign to the field (type: set)"
+          "description": "Static value to assign to the field (type: set). Use as a low-level escape hatch for unusual requirements"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name value to assign (type: setMetadata)"
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "Logo URL value to assign (type: setMetadata)"
+        },
+        "tvgId": {
+          "type": "string",
+          "description": "TVG ID value to assign (type: setMetadata)"
         },
         "field": {
           "type": "string",
