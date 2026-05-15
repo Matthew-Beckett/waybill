@@ -34,4 +34,4 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.uv.sources]
-dispatcharr = { path = "../Dispatcharr" }
+dispatcharr = { git = "https://github.com/Dispatcharr/Dispatcharr", tag = "v0.23.0" }
