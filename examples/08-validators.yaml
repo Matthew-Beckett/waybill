@@ -4,8 +4,8 @@ metadata:
   name: validators-example
   description: >
     Demonstrates all three validator types (count, regexMatch, nonEmpty) with both
-    action levels (warn, fail), stream-scoped and channel-scoped assertions, and
-    combining multiple validators on a single member.
+    action levels (warn, fail), count validators at both supported scopes
+    (member, channel), and combining multiple validators on a single member.
 spec:
   profiles:
     default:
@@ -33,6 +33,7 @@ spec:
                   replacement: ""
               validators:
                 - type: count
+                  scope: member
                   operator: gt
                   value: 0
                   action: warn
@@ -53,6 +54,7 @@ spec:
                   value: "NBS News"
               validators:
                 - type: count
+                  scope: member
                   operator: gt
                   value: 0
                   action: fail
@@ -78,6 +80,7 @@ spec:
                   replacement: ""
               validators:
                 - type: count
+                  scope: channel
                   operator: lte
                   value: 3
                   action: warn
@@ -87,8 +90,8 @@ spec:
           members:
 
             - name: Apex TV (regexMatch on name — warn)
-              # After transformation, assert the channel name looks as expected.
-              # A violation warns you that a transformer silently produced an unexpected value.
+              # After transformation, assert each transformed stream name looks as expected.
+              # The default scope is stream, so this checks every contributing stream.
               matchers:
                 - type: hasPrefix
                   field: name
@@ -107,9 +110,10 @@ spec:
                   pattern: "^Apex TV"
                   action: warn
 
-            - name: NBS 1-4 (regexMatch on name — fail)
-              # A strict brand-name check: any transformed name that doesn't match is
-              # a hard failure — it means the transformation pipeline drifted from spec.
+            - name: NBS 1-4 (regexMatch on channel name — fail)
+              # A strict final-name check against the assembled channel after merging.
+              # This is useful when you care about the emitted channel metadata rather
+              # than each individual contributing stream.
               matchers:
                 - type: regex
                   field: name
@@ -126,6 +130,7 @@ spec:
                   replacement: "$1"
               validators:
                 - type: regexMatch
+                  scope: channel
                   field: name
                   pattern: "^NBS [1-4]$"
                   action: fail
@@ -135,8 +140,8 @@ spec:
           members:
 
             - name: Arena Sports EPG check (nonEmpty tvg_id — warn)
-              # Assert that streams carry EPG metadata after transformation.
-              # A violation means streams will appear in Dispatcharr without guide data.
+              # Assert that each transformed stream carries EPG metadata.
+              # A violation means one or more upstream streams are missing guide data.
               matchers:
                 - type: regex
                   field: name
@@ -153,9 +158,10 @@ spec:
                   field: tvg_id
                   action: warn
 
-            - name: NBS News logo + EPG (nonEmpty — fail)
-              # Require both logo_url and tvg_id to be non-empty; a missing value is a
-              # hard failure because NBS News must always have both in this profile.
+            - name: NBS News logo + EPG (nonEmpty channel metadata — fail)
+              # Require the final assembled channel metadata to include both logo_url and
+              # tvg_id; a missing value is a hard failure because the emitted channel would
+              # be incomplete in this profile.
               matchers:
                 - type: containsAny
                   field: name
@@ -169,9 +175,11 @@ spec:
                   value: "NBS News"
               validators:
                 - type: nonEmpty
+                  scope: channel
                   field: tvg_id
                   action: fail
                 - type: nonEmpty
+                  scope: channel
                   field: logo_url
                   action: fail
 
@@ -181,9 +189,9 @@ spec:
 
             - name: NBS Four (count + regexMatch + nonEmpty)
               # All three validator types together as a complete sanity-check suite:
-              #   1. At least one stream must be matched (count).
-              #   2. The final channel name must be exactly "NBS 4" (regexMatch).
-              #   3. Every stream must carry EPG metadata (nonEmpty).
+              #   1. At least one channel must be produced (count, member scope).
+              #   2. Every transformed stream name must match "NBS 4" (regexMatch).
+              #   3. Every transformed stream must carry EPG metadata (nonEmpty).
               matchers:
                 - type: exactMatch
                   field: name
@@ -200,6 +208,7 @@ spec:
                   value: "NBS 4"
               validators:
                 - type: count
+                  scope: member
                   operator: gt
                   value: 0
                   action: fail

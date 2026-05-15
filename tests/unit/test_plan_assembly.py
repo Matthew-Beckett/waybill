@@ -13,7 +13,7 @@ with no external dependencies.
 
 from __future__ import annotations
 
-from src.plan import _most_common, assemble_member_plan
+from src.plan import WaybillPlanFormatter, _most_common, assemble_member_plan
 from src.types.config import OrderStreamsBy
 from src.types.plan import (
     DroppedRecord,
@@ -24,11 +24,6 @@ from src.types.plan import (
     ValidatorViolation,
     WaybillPlan,
 )
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _stream_record(
@@ -61,11 +56,6 @@ def _violation(
 
 def _member_plan(violations: list[ValidatorViolation] | None = None) -> MemberPlan:
     return MemberPlan(member_name="test", violations=violations or [])
-
-
-# ---------------------------------------------------------------------------
-# WaybillPlan.has_failures()
-# ---------------------------------------------------------------------------
 
 
 class TestWaybillPlanHasFailures:
@@ -109,11 +99,6 @@ class TestWaybillPlanHasFailures:
         assert plan.has_failures() is True
 
 
-# ---------------------------------------------------------------------------
-# MemberPlan.dropped_count
-# ---------------------------------------------------------------------------
-
-
 class TestMemberPlanDroppedCount:
     def test_zero_when_no_dropped(self) -> None:
         mp = MemberPlan(member_name="test", dropped=[])
@@ -129,11 +114,6 @@ class TestMemberPlanDroppedCount:
             member_name="test", dropped=[DroppedRecord(original_name="BBC One")]
         )
         assert mp.dropped_count == 1
-
-
-# ---------------------------------------------------------------------------
-# _most_common()
-# ---------------------------------------------------------------------------
 
 
 class TestMostCommon:
@@ -158,11 +138,6 @@ class TestMostCommon:
 
     def test_all_same_value(self) -> None:
         assert _most_common(["z", "z", "z"]) == "z"
-
-
-# ---------------------------------------------------------------------------
-# assemble_member_plan()
-# ---------------------------------------------------------------------------
 
 
 class TestAssembleMemberPlan:
@@ -362,6 +337,44 @@ class TestAssembleMemberPlan:
         )
         assert result.matcher_descs == ["regex: ^BBC"]
         assert result.transformer_descs == ["strip(prefix=UK: )"]
+
+
+class TestWaybillPlanFormatter:
+    def test_includes_member_scope_violations(self) -> None:
+        plan = WaybillPlan(
+            manifest_name="test",
+            profiles=[
+                ProfilePlan(
+                    key="default",
+                    groups=[
+                        GroupPlan(
+                            key="sports",
+                            name="Sports",
+                            members=[
+                                MemberPlan(
+                                    member_name="Arena Sports",
+                                    validator_descs=[
+                                        'count(scope="member") > 0 → fail'
+                                    ],
+                                    violations=[
+                                        _violation(
+                                            action="fail",
+                                            scope="member",
+                                            target="Arena Sports",
+                                        )
+                                    ],
+                                )
+                            ],
+                        )
+                    ],
+                )
+            ],
+        )
+
+        lines = WaybillPlanFormatter().format(plan)
+
+        assert "      Violations: 1 member validation(s)" in lines
+        assert '        [FAIL] [V1] "Arena Sports": test validator' in lines
 
     def test_quality_ordering_sorts_streams_by_resolution_descending(self) -> None:
         raw_groups = {

@@ -24,15 +24,11 @@ from src.types.config import (
     TransformerType,
     ValidatorAction,
     ValidatorOperator,
+    ValidatorScope,
     ValidatorType,
     _to_transformer,
     _to_validator,
 )
-
-
-# ---------------------------------------------------------------------------
-# _to_transformer
-# ---------------------------------------------------------------------------
 
 
 class TestToTransformer:
@@ -188,11 +184,6 @@ class TestToTransformer:
         assert result.action == ""
 
 
-# ---------------------------------------------------------------------------
-# _to_validator
-# ---------------------------------------------------------------------------
-
-
 class TestToValidator:
     # --- identity pass-through ---
 
@@ -321,6 +312,30 @@ class TestToValidator:
         result = _to_validator({"type": "count", "value": 10000})
         assert result.value == 10000
 
+    @pytest.mark.parametrize(
+        ("validator_type", "raw_scope", "expected"),
+        [
+            ("count", "channel", ValidatorScope.CHANNEL),
+            ("count", ValidatorScope.MEMBER, ValidatorScope.MEMBER),
+            ("regexMatch", "stream", ValidatorScope.STREAM),
+            ("nonEmpty", ValidatorScope.CHANNEL, ValidatorScope.CHANNEL),
+        ],
+    )
+    def test_scope_coercion(
+        self, validator_type: str, raw_scope: object, expected: ValidatorScope
+    ) -> None:
+        result = _to_validator({"type": validator_type, "scope": raw_scope})
+        assert result.scope is expected
+
+    @pytest.mark.parametrize("validator_type", ["count", "nonEmpty"])
+    def test_scope_absent_defaults_to_none(self, validator_type: str) -> None:
+        result = _to_validator({"type": validator_type})
+        assert result.scope is None
+
+    def test_scope_empty_string_defaults_to_none(self) -> None:
+        result = _to_validator({"type": "count", "scope": ""})
+        assert result.scope is None
+
     # --- pattern and field ---
 
     def test_pattern_preserved(self) -> None:
@@ -339,10 +354,9 @@ class TestToValidator:
         result = _to_validator({"type": "nonEmpty"})
         assert result.field == "name"
 
-
-# ---------------------------------------------------------------------------
-# ConfigMember._to_matcher  (tested via ConfigMember.__post_init__)
-# ---------------------------------------------------------------------------
+    def test_scope_invalid_raises(self) -> None:
+        with pytest.raises(ValueError):
+            _to_validator({"type": "count", "scope": "everywhere"})
 
 
 class TestConfigMemberToMatcher:
@@ -501,11 +515,6 @@ class TestConfigMemberToMatcher:
         assert member.matchers[0].pattern == ""
 
 
-# ---------------------------------------------------------------------------
-# ConfigMember.__post_init__ — coercion of all three sub-lists
-# ---------------------------------------------------------------------------
-
-
 class TestConfigMemberPostInit:
     def test_matchers_dicts_coerced_on_construction(self) -> None:
         member = ConfigMember(
@@ -562,11 +571,6 @@ class TestConfigMemberPostInit:
         assert member.matchers == []
         assert member.transformers == []
         assert member.validators == []
-
-
-# ---------------------------------------------------------------------------
-# ConfigMatcher.__post_init__ — transformers coerced inside a matcher
-# ---------------------------------------------------------------------------
 
 
 class TestConfigMatcherPostInit:

@@ -6,10 +6,9 @@ import sys
 import types
 from types import SimpleNamespace
 
+import pytest
 
-# ---------------------------------------------------------------------------
-# Stub minimal Django deps required by validator imports
-# ---------------------------------------------------------------------------
+
 _channels_models = types.ModuleType("apps.channels.models")
 _channels_models.Stream = object  # type: ignore[attr-defined]
 
@@ -21,16 +20,30 @@ for _mod_name, _mod in (
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = _mod
 
-from src.validators import build_validator  # noqa: E402
-from src.validators.base import WaybillChannelValidatorBase, WaybillStreamValidatorBase  # noqa: E402
-from src.validators.count import WaybillValidatorCount  # noqa: E402
-from src.validators.non_empty import WaybillValidatorNonEmpty  # noqa: E402
-from src.validators.regex import WaybillValidatorRegexMatch  # noqa: E402
 from src.types.config import (  # noqa: E402
     ConfigValidator,
-    ValidatorAction,
     ValidatorOperator,
+    ValidatorScope,
     ValidatorType,
+)
+from src.types.plan import ChannelPlan, MemberPlan, StreamRecord  # noqa: E402
+from src.validators import build_validator  # noqa: E402
+from src.validators.base import (  # noqa: E402
+    WaybillChannelValidatorBase,
+    WaybillMemberValidatorBase,
+    WaybillStreamValidatorBase,
+)
+from src.validators.count import (  # noqa: E402
+    WaybillValidatorCountChannel,
+    WaybillValidatorCountMember,
+)
+from src.validators.non_empty import (  # noqa: E402
+    WaybillValidatorNonEmpty,
+    WaybillValidatorNonEmptyChannel,
+)
+from src.validators.regex import (  # noqa: E402
+    WaybillValidatorRegexMatch,
+    WaybillValidatorRegexMatchChannel,
 )
 
 
@@ -38,210 +51,302 @@ def _stream(name: str = "Channel 1", tvg_id: str = "ch1.demo") -> SimpleNamespac
     return SimpleNamespace(name=name, tvg_id=tvg_id, logo_url="")
 
 
-def _records(count: int = 1) -> list[SimpleNamespace]:
-    return [SimpleNamespace(id=i, transformed_name=f"ch{i}") for i in range(count)]
+def _stream_record(id: int = 1) -> StreamRecord:
+    return StreamRecord(
+        id=id,
+        original_name=f"Channel {id}",
+        transformed_name="Channel",
+    )
 
 
-# ---------------------------------------------------------------------------
-# WaybillValidatorNonEmpty
-# ---------------------------------------------------------------------------
+def _channel(count: int = 1, name: str = "Channel") -> ChannelPlan:
+    return ChannelPlan(name=name, streams=[_stream_record(i) for i in range(count)])
+
+
+def _member(channel_count: int = 1) -> MemberPlan:
+    return MemberPlan(
+        member_name="Member",
+        channels=[ChannelPlan(name=f"Channel {i}") for i in range(channel_count)],
+    )
 
 
 class TestWaybillValidatorNonEmpty:
-    def test_passes_when_name_non_empty(self) -> None:
-        v = WaybillValidatorNonEmpty(action="warn", field="name")
-        assert v.validate(_stream(name="BBC One")) is True
-
-    def test_fails_when_name_empty(self) -> None:
-        v = WaybillValidatorNonEmpty(action="warn", field="name")
-        assert v.validate(_stream(name="")) is False
-
-    def test_passes_when_tvg_id_non_empty(self) -> None:
-        v = WaybillValidatorNonEmpty(action="warn", field="tvg_id")
-        assert v.validate(_stream(tvg_id="bbc.one")) is True
-
-    def test_fails_when_tvg_id_empty(self) -> None:
-        v = WaybillValidatorNonEmpty(action="warn", field="tvg_id")
-        assert v.validate(_stream(tvg_id="")) is False
+    @pytest.mark.parametrize(
+        ("field", "stream_kwargs", "expected"),
+        [
+            ("name", {"name": "BBC One"}, True),
+            ("name", {"name": ""}, False),
+            ("tvg_id", {"tvg_id": "bbc.one"}, True),
+            ("tvg_id", {"tvg_id": ""}, False),
+        ],
+    )
+    def test_stream_scope_validation(
+        self,
+        field: str,
+        stream_kwargs: dict[str, str],
+        expected: bool,
+    ) -> None:
+        validator = WaybillValidatorNonEmpty(action="warn", field=field)
+        assert validator.validate(_stream(**stream_kwargs)) is expected
 
     def test_action_is_preserved(self) -> None:
-        v = WaybillValidatorNonEmpty(action="fail", field="name")
-        assert v.action == "fail"
+        validator = WaybillValidatorNonEmpty(action="fail", field="name")
+        assert validator.action == "fail"
 
     def test_describe_includes_field_and_action(self) -> None:
-        v = WaybillValidatorNonEmpty(action="warn", field="tvg_id")
-        desc = v.describe()
+        desc = WaybillValidatorNonEmpty(action="warn", field="tvg_id").describe()
         assert "tvg_id" in desc
         assert "warn" in desc
 
     def test_is_stream_validator(self) -> None:
-        v = WaybillValidatorNonEmpty(action="warn", field="name")
-        assert isinstance(v, WaybillStreamValidatorBase)
+        assert isinstance(
+            WaybillValidatorNonEmpty(action="warn", field="name"),
+            WaybillStreamValidatorBase,
+        )
 
+    @pytest.mark.parametrize(
+        ("field", "channel_kwargs", "expected"),
+        [
+            ("name", {"name": "BBC One"}, True),
+            ("name", {"name": ""}, False),
+            ("tvg_id", {"epg_id": "bbc.one"}, True),
+            ("tvg_id", {"epg_id": ""}, False),
+        ],
+    )
+    def test_channel_scope_validation(
+        self,
+        field: str,
+        channel_kwargs: dict[str, str],
+        expected: bool,
+    ) -> None:
+        validator = WaybillValidatorNonEmptyChannel(action="warn", field=field)
+        assert (
+            validator.validate(ChannelPlan(**{"name": "Channel", **channel_kwargs}))
+            is expected
+        )
 
-# ---------------------------------------------------------------------------
-# WaybillValidatorRegexMatch
-# ---------------------------------------------------------------------------
+    def test_channel_description_mentions_scope(self) -> None:
+        desc = WaybillValidatorNonEmptyChannel(action="warn", field="tvg_id").describe()
+        assert 'scope="channel"' in desc
+        assert "tvg_id" in desc
+
+    def test_channel_validator_base(self) -> None:
+        assert isinstance(
+            WaybillValidatorNonEmptyChannel(action="warn", field="name"),
+            WaybillChannelValidatorBase,
+        )
 
 
 class TestWaybillValidatorRegexMatch:
-    def test_passes_when_pattern_matches(self) -> None:
-        v = WaybillValidatorRegexMatch(pattern=r"^BBC", action="warn", field="name")
-        assert v.validate(_stream(name="BBC One")) is True
-
-    def test_fails_when_pattern_does_not_match(self) -> None:
-        v = WaybillValidatorRegexMatch(pattern=r"^BBC", action="warn", field="name")
-        assert v.validate(_stream(name="ITV 1")) is False
-
-    def test_pattern_on_tvg_id_field(self) -> None:
-        v = WaybillValidatorRegexMatch(
-            pattern=r"\.demo$", action="warn", field="tvg_id"
+    @pytest.mark.parametrize(
+        ("field", "pattern", "stream_kwargs", "expected"),
+        [
+            ("name", r"^BBC", {"name": "BBC One"}, True),
+            ("name", r"^BBC", {"name": "ITV 1"}, False),
+            ("tvg_id", r"\.demo$", {"tvg_id": "bbc.demo"}, True),
+            ("tvg_id", r"\.demo$", {"tvg_id": "bbc.live"}, False),
+        ],
+    )
+    def test_stream_scope_validation(
+        self,
+        field: str,
+        pattern: str,
+        stream_kwargs: dict[str, str],
+        expected: bool,
+    ) -> None:
+        validator = WaybillValidatorRegexMatch(
+            pattern=pattern,
+            action="warn",
+            field=field,
         )
-        assert v.validate(_stream(tvg_id="bbc.demo")) is True
-        assert v.validate(_stream(tvg_id="bbc.live")) is False
+        assert validator.validate(_stream(**stream_kwargs)) is expected
 
     def test_action_is_preserved(self) -> None:
-        v = WaybillValidatorRegexMatch(pattern=r".*", action="fail", field="name")
-        assert v.action == "fail"
+        assert (
+            WaybillValidatorRegexMatch(
+                pattern=r".*", action="fail", field="name"
+            ).action
+            == "fail"
+        )
 
     def test_describe_includes_pattern_and_action(self) -> None:
-        v = WaybillValidatorRegexMatch(pattern=r"^NBS", action="warn", field="name")
-        desc = v.describe()
+        desc = WaybillValidatorRegexMatch(
+            pattern=r"^NBS",
+            action="warn",
+            field="name",
+        ).describe()
         assert "NBS" in desc
         assert "warn" in desc
 
     def test_is_stream_validator(self) -> None:
-        v = WaybillValidatorRegexMatch(pattern=r".*", action="warn", field="name")
-        assert isinstance(v, WaybillStreamValidatorBase)
+        assert isinstance(
+            WaybillValidatorRegexMatch(pattern=r".*", action="warn", field="name"),
+            WaybillStreamValidatorBase,
+        )
+
+    @pytest.mark.parametrize(
+        ("field", "pattern", "channel_kwargs", "expected"),
+        [
+            ("name", r"^BBC", {"name": "BBC One"}, True),
+            ("name", r"^BBC", {"name": "ITV 1"}, False),
+            ("tvg_id", r"\.demo$", {"epg_id": "bbc.demo"}, True),
+            ("tvg_id", r"\.demo$", {"epg_id": "bbc.live"}, False),
+        ],
+    )
+    def test_channel_scope_validation(
+        self,
+        field: str,
+        pattern: str,
+        channel_kwargs: dict[str, str],
+        expected: bool,
+    ) -> None:
+        validator = WaybillValidatorRegexMatchChannel(
+            pattern=pattern,
+            action="warn",
+            field=field,
+        )
+        assert (
+            validator.validate(ChannelPlan(**{"name": "Channel", **channel_kwargs}))
+            is expected
+        )
+
+    def test_channel_description_mentions_scope(self) -> None:
+        desc = WaybillValidatorRegexMatchChannel(
+            pattern=r"^NBS",
+            action="warn",
+            field="name",
+        ).describe()
+        assert 'scope="channel"' in desc
+        assert "NBS" in desc
+
+    def test_channel_validator_base(self) -> None:
+        assert isinstance(
+            WaybillValidatorRegexMatchChannel(
+                pattern=r".*",
+                action="warn",
+                field="name",
+            ),
+            WaybillChannelValidatorBase,
+        )
 
 
-# ---------------------------------------------------------------------------
-# WaybillValidatorCount
-# ---------------------------------------------------------------------------
-
-
-class TestWaybillValidatorCount:
-    def test_gt_passes(self) -> None:
-        assert WaybillValidatorCount("gt", 0).validate("ch", _records(1)) is True
-
-    def test_gt_fails_when_equal(self) -> None:
-        assert WaybillValidatorCount("gt", 1).validate("ch", _records(1)) is False
-
-    def test_gte_passes_when_equal(self) -> None:
-        assert WaybillValidatorCount("gte", 1).validate("ch", _records(1)) is True
-
-    def test_gte_fails_below(self) -> None:
-        assert WaybillValidatorCount("gte", 2).validate("ch", _records(1)) is False
-
-    def test_lt_passes(self) -> None:
-        assert WaybillValidatorCount("lt", 5).validate("ch", _records(3)) is True
-
-    def test_lt_fails_when_equal(self) -> None:
-        assert WaybillValidatorCount("lt", 3).validate("ch", _records(3)) is False
-
-    def test_lte_passes_when_equal(self) -> None:
-        assert WaybillValidatorCount("lte", 3).validate("ch", _records(3)) is True
-
-    def test_lte_fails_above(self) -> None:
-        assert WaybillValidatorCount("lte", 2).validate("ch", _records(3)) is False
-
-    def test_eq_passes(self) -> None:
-        assert WaybillValidatorCount("eq", 2).validate("ch", _records(2)) is True
-
-    def test_eq_fails(self) -> None:
-        assert WaybillValidatorCount("eq", 2).validate("ch", _records(3)) is False
-
-    def test_neq_passes(self) -> None:
-        assert WaybillValidatorCount("neq", 0).validate("ch", _records(2)) is True
-
-    def test_neq_fails_when_equal(self) -> None:
-        assert WaybillValidatorCount("neq", 2).validate("ch", _records(2)) is False
-
-    def test_zero_streams(self) -> None:
-        assert WaybillValidatorCount("gt", 0).validate("ch", _records(0)) is False
-        assert WaybillValidatorCount("eq", 0).validate("ch", _records(0)) is True
+class TestWaybillValidatorCountChannel:
+    @pytest.mark.parametrize(
+        ("operator", "value", "stream_count", "expected"),
+        [
+            ("gt", 0, 1, True),
+            ("gt", 1, 1, False),
+            ("gte", 1, 1, True),
+            ("gte", 2, 1, False),
+            ("lt", 5, 3, True),
+            ("lt", 3, 3, False),
+            ("lte", 3, 3, True),
+            ("lte", 2, 3, False),
+            ("eq", 2, 2, True),
+            ("eq", 2, 3, False),
+            ("neq", 0, 2, True),
+            ("neq", 2, 2, False),
+            ("gt", 0, 0, False),
+            ("eq", 0, 0, True),
+        ],
+    )
+    def test_validate(
+        self, operator: str, value: int, stream_count: int, expected: bool
+    ) -> None:
+        assert (
+            WaybillValidatorCountChannel(operator, value).validate(
+                _channel(stream_count)
+            )
+            is expected
+        )
 
     def test_action_is_preserved(self) -> None:
-        v = WaybillValidatorCount("gt", 0, action="fail")
-        assert v.action == "fail"
+        assert WaybillValidatorCountChannel("gt", 0, action="fail").action == "fail"
 
-    def test_describe_includes_operator_value_and_action(self) -> None:
-        v = WaybillValidatorCount("gt", 0, action="warn")
-        desc = v.describe()
-        assert ">" in desc
+    def test_describe_includes_scope_value_and_action(self) -> None:
+        desc = WaybillValidatorCountChannel("gt", 0, action="warn").describe()
+        assert 'scope="channel"' in desc
         assert "0" in desc
         assert "warn" in desc
 
     def test_is_channel_validator(self) -> None:
-        v = WaybillValidatorCount("gt", 0)
-        assert isinstance(v, WaybillChannelValidatorBase)
+        assert isinstance(
+            WaybillValidatorCountChannel("gt", 0),
+            WaybillChannelValidatorBase,
+        )
 
 
-# ---------------------------------------------------------------------------
-# build_validator factory
-# ---------------------------------------------------------------------------
+class TestWaybillValidatorCountMember:
+    @pytest.mark.parametrize(
+        ("operator", "value", "channel_count", "expected"),
+        [
+            ("gt", 0, 1, True),
+            ("gt", 1, 1, False),
+            ("eq", 2, 2, True),
+            ("eq", 2, 3, False),
+            ("gt", 0, 0, False),
+            ("eq", 0, 0, True),
+        ],
+    )
+    def test_validate(
+        self,
+        operator: str,
+        value: int,
+        channel_count: int,
+        expected: bool,
+    ) -> None:
+        assert (
+            WaybillValidatorCountMember(operator, value).validate(
+                _member(channel_count)
+            )
+            is expected
+        )
+
+    def test_is_member_validator(self) -> None:
+        assert isinstance(
+            WaybillValidatorCountMember("gt", 0), WaybillMemberValidatorBase
+        )
 
 
 class TestBuildValidator:
-    def _cfg(
+    @pytest.mark.parametrize(
+        ("cfg", "expected_cls"),
+        [
+            (
+                ConfigValidator(type=ValidatorType.COUNT, value=1),
+                WaybillValidatorCountMember,
+            ),
+            (
+                ConfigValidator(
+                    type=ValidatorType.COUNT,
+                    operator=ValidatorOperator.GT,
+                    value=0,
+                    scope=ValidatorScope.CHANNEL,
+                ),
+                WaybillValidatorCountChannel,
+            ),
+            (
+                ConfigValidator(
+                    type=ValidatorType.NON_EMPTY,
+                    field="tvg_id",
+                    scope=ValidatorScope.CHANNEL,
+                ),
+                WaybillValidatorNonEmptyChannel,
+            ),
+            (
+                ConfigValidator(
+                    type=ValidatorType.REGEX_MATCH,
+                    pattern=r"^NBS",
+                    field="name",
+                    scope=ValidatorScope.CHANNEL,
+                ),
+                WaybillValidatorRegexMatchChannel,
+            ),
+        ],
+    )
+    def test_build_validator_respects_scope(
         self,
-        validator_type: ValidatorType,
-        action: ValidatorAction = ValidatorAction.WARN,
-        operator: ValidatorOperator = ValidatorOperator.GT,
-        value: int = 0,
-        pattern: str = "",
-        field: str = "name",
-    ) -> ConfigValidator:
-        return ConfigValidator(
-            type=validator_type,
-            action=action,
-            operator=operator,
-            value=value,
-            pattern=pattern,
-            field=field,
-        )
-
-    def test_builds_non_empty(self) -> None:
-        v = build_validator(self._cfg(ValidatorType.NON_EMPTY))
-        assert isinstance(v, WaybillValidatorNonEmpty)
-
-    def test_builds_regex_match(self) -> None:
-        v = build_validator(self._cfg(ValidatorType.REGEX_MATCH, pattern=r"^BBC"))
-        assert isinstance(v, WaybillValidatorRegexMatch)
-
-    def test_builds_count(self) -> None:
-        v = build_validator(self._cfg(ValidatorType.COUNT, value=1))
-        assert isinstance(v, WaybillValidatorCount)
-
-    def test_non_empty_propagates_action_and_field(self) -> None:
-        v = build_validator(
-            self._cfg(
-                ValidatorType.NON_EMPTY, action=ValidatorAction.FAIL, field="tvg_id"
-            )
-        )
-        assert v.action == "fail"
-        assert v.field == "tvg_id"  # type: ignore[union-attr]
-
-    def test_regex_match_propagates_pattern_and_field(self) -> None:
-        v = build_validator(
-            self._cfg(ValidatorType.REGEX_MATCH, pattern=r"^NBS", field="tvg_id")
-        )
-        assert isinstance(v, WaybillValidatorRegexMatch)
-        assert v._pattern == r"^NBS"
-        assert v.field == "tvg_id"
-
-    def test_count_propagates_operator_and_value(self) -> None:
-        v = build_validator(
-            self._cfg(
-                ValidatorType.COUNT,
-                operator=ValidatorOperator.GTE,
-                value=3,
-            )
-        )
-        assert isinstance(v, WaybillValidatorCount)
-        assert v._operator_key == "gte"
-        assert v._value == 3
-
-    def test_count_propagates_action(self) -> None:
-        v = build_validator(self._cfg(ValidatorType.COUNT, action=ValidatorAction.FAIL))
-        assert v.action == "fail"
+        cfg: ConfigValidator,
+        expected_cls: type,
+    ) -> None:
+        assert isinstance(build_validator(cfg), expected_cls)

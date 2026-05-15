@@ -66,8 +66,8 @@ class ValidatorViolation:
     validator_index: int  # 1-based index into the member's validators list
     validator_desc: str
     action: str  # "warn" or "fail"
-    scope: str  # "stream" or "channel"
-    target: str  # transformed stream name or channel name
+    scope: str  # "stream", "channel", or "member"
+    target: str  # transformed stream name, channel name, or member name
 
 
 @dataclass(frozen=True)

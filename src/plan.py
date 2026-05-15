@@ -218,6 +218,18 @@ class WaybillPlanFormatter:
                             lines.append(
                                 f'        {tag} [V{v.validator_index}] "{v.target}": {v.validator_desc}'
                             )
+                    member_violations = [
+                        v for v in member.violations if v.scope == "member"
+                    ]
+                    if member_violations:
+                        lines.append(
+                            f"      Violations: {len(member_violations)} member validation(s)"
+                        )
+                        for v in member_violations:
+                            tag = "[FAIL]" if v.action == "fail" else "[WARN]"
+                            lines.append(
+                                f'        {tag} [V{v.validator_index}] "{v.target}": {v.validator_desc}'
+                            )
 
         profile_count = len(plan.profiles)
         lines.append(

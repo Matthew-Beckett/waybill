@@ -262,7 +262,7 @@ Converts between digit and word forms of cardinal numbers (e.g. `ONE ↔ 1`).
 
 ## Validators
 
-Validators run after all transformers have been applied and assert simple conditions about the resulting streams or channels. They are **observational-only** — they never drop a stream or channel. A violation either logs a warning (`action: warn`) or logs an error and halts execution before any database write (`action: fail`).
+Validators run after all transformers have been applied and assert simple conditions about the resulting transformed streams. They are **observational-only** — they never drop a stream or channel. A violation either logs a warning (`action: warn`) or logs an error and halts execution before any database write (`action: fail`).
 
 Validators are declared on a member, alongside `matchers` and `transformers`:
 
@@ -279,23 +279,30 @@ Validators are declared on a member, alongside `matchers` and `transformers`:
 
 | Type | Scope | Description |
 |---|---|---|
-| `count` | channel | Asserts that the number of streams in an assembled channel satisfies a numeric comparison |
-| `regexMatch` | stream | Asserts that a stream field matches a regular expression after transformation |
-| `nonEmpty` | stream | Asserts that a stream field is non-empty after transformation |
+| `count` | `member` by default, optional `channel` | Asserts either the number of channels produced by a member or the number of streams in each assembled channel |
+| `regexMatch` | `stream` by default, optional `channel` | Asserts that a stream or assembled channel field matches a regular expression after transformation and merging |
+| `nonEmpty` | `stream` by default, optional `channel` | Asserts that a stream or assembled channel field is non-empty after transformation and merging |
 
-**Scopes:**
-- **stream** — evaluated once per transformed stream before channel assembly
-- **channel** — evaluated once per assembled channel, after all streams have been grouped
+`scope` is available on all validators, but the allowed values depend on the validator type.
+
+**Count scopes:**
+- **member** — evaluated once per member after grouping and merging; counts the number of channels produced
+- **channel** — evaluated once per assembled channel; counts the number of streams in that channel
+
+**regexMatch / nonEmpty scopes:**
+- **stream** — evaluated once per transformed stream before grouped streams are reported under a shared channel
+- **channel** — evaluated once per assembled channel after merging; useful when you care about the final emitted channel metadata rather than each contributing stream
 
 Violations are printed in the plan output alongside the channel or stream that triggered them, and summarised in the `=== Summary ===` section.
 
 ### `count`
 
-Asserts that the number of streams resolved for a channel satisfies `count <operator> <value>`.
-The most common use-case is asserting the count is greater than zero — an immediate signal of a feed outage or upstream name change.
+Asserts either the number of channels produced by a member or the number of streams resolved for each channel satisfies `count <operator> <value>`.
+The default `scope: member` is the feed-health check: it still fires when a member produces zero channels after matching, transformation, and merging.
 
 ```yaml
 - type: count
+  scope: member
   operator: gt
   value: 0
   action: warn
@@ -303,16 +310,18 @@ The most common use-case is asserting the count is greater than zero — an imme
 
 | Field | Required | Description |
 |---|---|---|
+| `scope` | no (default: `member`) | `member` counts produced channels; `channel` counts streams in each assembled channel |
 | `operator` | yes | One of: `gt`, `gte`, `lt`, `lte`, `eq`, `neq` |
 | `value` | yes | Integer to compare the count against |
 | `action` | no (default: `warn`) | `warn` or `fail` |
 
 ### `regexMatch`
 
-Asserts that a stream field matches a regular expression after transformation. Useful for catching transformer regressions where a pipeline silently produces an unexpected name.
+Asserts that a field matches a regular expression after transformation. The default `scope: stream` catches per-stream transformer drift; `scope: channel` validates the final assembled channel metadata after merging.
 
 ```yaml
 - type: regexMatch
+  scope: channel
   field: name
   pattern: "^BBC [1-9]"
   action: fail
@@ -320,23 +329,26 @@ Asserts that a stream field matches a regular expression after transformation. U
 
 | Field | Required | Description |
 |---|---|---|
+| `scope` | no (default: `stream`) | `stream` validates each transformed stream; `channel` validates the assembled channel |
 | `pattern` | yes | Python regular expression |
-| `field` | no (default: `name`) | Stream attribute to evaluate |
+| `field` | no (default: `name`) | Stream or channel attribute to evaluate; `tvg_id` maps to channel `epg_id` when `scope: channel` |
 | `action` | no (default: `warn`) | `warn` or `fail` |
 
 ### `nonEmpty`
 
-Asserts that a stream field is non-empty. Useful for ensuring streams carry EPG or logo metadata before they are written to Dispatcharr.
+Asserts that a field is non-empty. The default `scope: stream` checks each transformed stream; `scope: channel` checks the assembled channel metadata that will actually be emitted.
 
 ```yaml
 - type: nonEmpty
+  scope: channel
   field: tvg_id
   action: warn
 ```
 
 | Field | Required | Description |
 |---|---|---|
-| `field` | no (default: `name`) | Stream attribute to check |
+| `scope` | no (default: `stream`) | `stream` validates each transformed stream; `channel` validates the assembled channel |
+| `field` | no (default: `name`) | Stream or channel attribute to check; `tvg_id` maps to channel `epg_id` when `scope: channel` |
 | `action` | no (default: `warn`) | `warn` or `fail` |
 
 ---

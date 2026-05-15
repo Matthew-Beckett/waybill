@@ -27,6 +27,7 @@ dev = [
     "dacite>=1.9.2",
     "pyyaml>=6.0",
     "pytest>=8.3.5",
+    "pytest-xdist[psutil]>=3.8.0",
 ]
 
 [tool.pytest.ini_options]

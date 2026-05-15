@@ -90,8 +90,9 @@ CLASS_DESCRIPTIONS: dict[type, str] = {
         "transformers run in order after all matchers pass"
     ),
     ConfigValidator: (
-        "A post-transformation assertion applied to individual streams or assembled channels; "
-        "violations are surfaced as warnings or halt execution as failures"
+        "A post-transformation assertion applied to transformed streams, or for count "
+        "validators to assembled channels/member output; violations are surfaced as "
+        "warnings or halt execution as failures"
     ),
 }
 
@@ -131,8 +132,8 @@ FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
     (ConfigMember, "matchers"): "Ordered matchers used to filter input streams",
     (ConfigMember, "transformers"): "Ordered transformers applied to matched streams",
     (ConfigMember, "validators"): (
-        "Post-transformation validators that assert conditions on individual streams "
-        "(scope: stream) or on assembled channels (scope: channel); "
+        "Post-transformation validators that assert conditions on transformed streams, "
+        "assembled channels, or member output depending on validator type and scope; "
         "violations are logged as warnings or raise a failure before any database write"
     ),
     (ConfigMatcher, "type"): "Matching algorithm",
@@ -195,12 +196,18 @@ FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
         ConfigValidator,
         "value",
     ): "Integer to compare the stream count against (type: count)",
+    (ConfigValidator, "scope"): (
+        "Validator scope override. count defaults to 'member': 'member' counts channels "
+        "produced by the member after matching, transformation, and merging, while 'channel' "
+        "counts streams inside each assembled channel. regexMatch and nonEmpty default to "
+        "'stream' and may also use 'channel' to validate assembled channel fields after merging."
+    ),
     (ConfigValidator, "pattern"): (
         "Regular expression the field value must match (type: regexMatch)"
     ),
     (ConfigValidator, "field"): (
-        "Stream field to evaluate (type: regexMatch, nonEmpty); "
-        "e.g. 'name', 'tvg_id', 'logo_url'"
+        "Field to evaluate (type: regexMatch, nonEmpty); e.g. 'name', 'tvg_id', 'logo_url'. "
+        "For channel-scoped validation, 'tvg_id' maps to the assembled channel's epg_id field."
     ),
 }
 

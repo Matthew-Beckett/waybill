@@ -10,7 +10,11 @@ from .matchers import build_matcher, build_q_filter
 from .matchers.base import WaybillMatcherBase
 from .transformers import build_transformer
 from .validators import build_validator
-from .validators.base import WaybillChannelValidatorBase, WaybillStreamValidatorBase
+from .validators.base import (
+    WaybillChannelValidatorBase,
+    WaybillMemberValidatorBase,
+    WaybillStreamValidatorBase,
+)
 from .types.config import (
     ConfigMember,
     ConfigProfile,
@@ -79,6 +83,13 @@ class MemberPipeline:
             (v, self._validator_descs[i], i + 1)
             for i, v in enumerate(_all_validators)
             if isinstance(v, WaybillChannelValidatorBase)
+        ]
+        self._member_validator_pairs: list[
+            tuple[WaybillMemberValidatorBase, str, int]
+        ] = [
+            (v, self._validator_descs[i], i + 1)
+            for i, v in enumerate(_all_validators)
+            if isinstance(v, WaybillMemberValidatorBase)
         ]
 
     def required_fields(self) -> set[str]:
@@ -199,7 +210,7 @@ class MemberPipeline:
         # Channel-level validators run post-assembly against each assembled channel
         for cv, desc, idx in self._channel_validator_pairs:
             for channel in member_plan.channels:
-                if not cv.validate(channel.name, channel.streams):
+                if not cv.validate(channel):
                     all_violations.append(
                         ValidatorViolation(
                             validator_index=idx,
@@ -209,6 +220,19 @@ class MemberPipeline:
                             target=channel.name,
                         )
                     )
+
+        # Member-level validators run once per member, including when 0 channels were assembled.
+        for mv, desc, idx in self._member_validator_pairs:
+            if not mv.validate(member_plan):
+                all_violations.append(
+                    ValidatorViolation(
+                        validator_index=idx,
+                        validator_desc=desc,
+                        action=mv.action,
+                        scope="member",
+                        target=member_plan.member_name,
+                    )
+                )
 
         return replace(
             member_plan,

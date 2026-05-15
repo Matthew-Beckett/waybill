@@ -1,6 +1,6 @@
 from apps.channels.models import Stream
 
-from .base import WaybillStreamValidatorBase
+from .base import WaybillChannelValidatorBase, WaybillStreamValidatorBase
 
 
 class WaybillValidatorNonEmpty(WaybillStreamValidatorBase):
@@ -11,3 +11,13 @@ class WaybillValidatorNonEmpty(WaybillStreamValidatorBase):
 
     def _describe_self(self) -> str:
         return f'nonEmpty(field="{self.field}")'
+
+
+class WaybillValidatorNonEmptyChannel(WaybillChannelValidatorBase):
+    """Asserts that an assembled channel field is non-empty."""
+
+    def validate(self, channel) -> bool:
+        return bool(self._get_field_value(channel))
+
+    def _describe_self(self) -> str:
+        return f'nonEmpty(scope="channel", field="{self.field}")'

@@ -88,6 +88,12 @@ class ValidatorOperator(Enum):
     NEQ = "neq"
 
 
+class ValidatorScope(Enum):
+    STREAM = "stream"
+    CHANNEL = "channel"
+    MEMBER = "member"
+
+
 @dataclass(frozen=True)
 class ConfigMetadata:
     name: str
@@ -192,6 +198,7 @@ class ConfigValidator:
     operator: ValidatorOperator = ValidatorOperator.GT
     value: int = 0
     pattern: str = ""
+    scope: ValidatorScope | None = None
     # NOTE: `field` must be last — it shadows the dataclasses.field() import after this line
     field: str = "name"
 
@@ -236,12 +243,22 @@ def _to_validator(
     except (TypeError, ValueError):
         validator_value = 0
 
+    raw_scope = item.get("scope")
+    validator_scope: ValidatorScope | None
+    if raw_scope is None or raw_scope == "":
+        validator_scope = None
+    elif isinstance(raw_scope, ValidatorScope):
+        validator_scope = raw_scope
+    else:
+        validator_scope = ValidatorScope(str(raw_scope))
+
     return ConfigValidator(
         type=validator_type,
         action=validator_action,
         operator=validator_operator,
         value=validator_value,
         pattern=str(item.get("pattern", "")),
+        scope=validator_scope,
         field=str(item.get("field", "name")),
     )
 
