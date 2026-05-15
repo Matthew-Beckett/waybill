@@ -52,6 +52,7 @@ class TransformerType(Enum):
     REGEX = "regex"
     STRIP = "strip"
     SET = "set"
+    SET_METADATA = "setMetadata"
 
 
 class CardinalOutputType(Enum):
@@ -79,6 +80,9 @@ class ConfigTransformer:
     prefix: str = ""
     suffix: str = ""
     value: str = ""
+    name: str = ""
+    logo_url: str = ""
+    tvg_id: str = ""
     extra: dict[str, Any] = field(default_factory=_empty_str_any_dict)
     # NOTE: `field` must be last — it shadows the dataclasses.field() import after this line
     field: str = "name"
@@ -117,6 +121,9 @@ def _to_transformer(
         "prefix",
         "suffix",
         "value",
+        "name",
+        "logoUrl",
+        "tvgId",
     }
     extra = {str(key): value for key, value in item.items() if key not in known_keys}
 
@@ -129,6 +136,9 @@ def _to_transformer(
         prefix=str(item.get("prefix", "")),
         suffix=str(item.get("suffix", "")),
         value=str(item.get("value", "")),
+        name=str(item.get("name", "")),
+        logo_url=str(item.get("logoUrl", "")),
+        tvg_id=str(item.get("tvgId", "")),
         extra=extra,
         field=str(item.get("field", "name")),
     )

@@ -3,7 +3,8 @@ version: v1alpha1
 metadata:
   name: transformers-example
   description: >
-    Demonstrates all four transformer types (regex, convertCardinalNumbers, strip, set)
+    Demonstrates all five transformer types (regex, convertCardinalNumbers, strip, set,
+    setMetadata)
     with every supported option, including multi-step transformation pipelines and
     transformers targeting non-default stream fields.
 spec:
@@ -226,3 +227,45 @@ spec:
                 - type: set
                   field: tvg_id
                   value: "globereport.demo"
+
+        set_metadata_transformers:
+          name: Set Metadata Transformers
+          members:
+
+            - name: Assign canonical name (setMetadata name)
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  values:
+                    - "DEMO| Crestwood One"
+                    - "DEMO| Crestwood One HD"
+                    - "DEMO| CrestwoodOne"
+              transformers:
+                - type: setMetadata
+                  name: "Crestwood One"
+
+            - name: Set canonical name and tvgId in one transformer
+              # setMetadata can update multiple explicit metadata fields in one step.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: ".*\\bGlobe Report\\b.*"
+              transformers:
+                - type: setMetadata
+                  name: "Globe Report"
+                  tvgId: "globereport.demo"
+
+            - name: Set all supported setMetadata fields
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "Meridian World"
+              transformers:
+                - type: setMetadata
+                  name: "Meridian World"
+                  logoUrl: "https://images.example.com/logos/meridian-world.png"
+                  tvgId: "meridianworld.demo"
