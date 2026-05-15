@@ -144,7 +144,7 @@
     },
     "ConfigMember": {
       "type": "object",
-      "description": "A channel member with sequential matcher and transformer rules",
+      "description": "A channel member with sequential matcher, transformer, and validator rules",
       "properties": {
         "name": {
           "type": "string",
@@ -163,6 +163,13 @@
             "$ref": "#/$defs/ConfigTransformer"
           },
           "description": "Ordered transformers applied to matched streams"
+        },
+        "validators": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ConfigValidator"
+          },
+          "description": "Post-transformation validators that assert conditions on individual streams (scope: stream) or on assembled channels (scope: channel); violations are logged as warnings or raise a failure before any database write"
         },
         "streamProfile": {
           "type": [
@@ -327,6 +334,57 @@
         "type"
       ],
       "additionalProperties": true
+    },
+    "ConfigValidator": {
+      "type": "object",
+      "description": "A post-transformation assertion applied to individual streams or assembled channels; violations are surfaced as warnings or halt execution as failures",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "count",
+            "regexMatch",
+            "nonEmpty"
+          ],
+          "description": "Validation algorithm"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "warn",
+            "fail"
+          ],
+          "description": "Response when the assertion is violated \u2014 'warn' logs a warning; 'fail' logs an error and stops execution before any database write"
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "eq",
+            "neq"
+          ],
+          "description": "Comparison operator applied to the stream count (type: count); one of: gt, gte, lt, lte, eq, neq"
+        },
+        "value": {
+          "type": "integer",
+          "description": "Integer to compare the stream count against (type: count)"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regular expression the field value must match (type: regexMatch)"
+        },
+        "field": {
+          "type": "string",
+          "description": "Stream field to evaluate (type: regexMatch, nonEmpty); e.g. 'name', 'tvg_id', 'logo_url'"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
     }
   }
 }

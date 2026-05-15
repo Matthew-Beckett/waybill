@@ -91,6 +91,21 @@ spec:
                 - type: set
                   field: name
                   value: "NBS News"
+              validators:
+                # Alert if no streams are matched (obvious sign of a feed outage or name change).
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: warn
+                # Require the final channel name to look like a proper news title.
+                - type: regexMatch
+                  field: name
+                  pattern: "^NBS News$"
+                  action: fail
+                # Every stream should carry EPG metadata.
+                - type: nonEmpty
+                  field: tvg_id
+                  action: warn
 
             - name: NBS Four
               matchers:

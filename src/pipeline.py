@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from collections import defaultdict
 from copy import copy
+from dataclasses import replace
 
 from apps.channels.models import Stream
 
 from .matchers import build_matcher, build_q_filter
 from .matchers.base import WaybillMatcherBase
 from .transformers import build_transformer
+from .validators import build_validator
+from .validators.base import WaybillChannelValidatorBase, WaybillStreamValidatorBase
 from .types.config import (
     ConfigMember,
     ConfigProfile,
@@ -22,6 +25,7 @@ from .types.plan import (
     ProfilePlan,
     StreamRecord,
     TransformStep,
+    ValidatorViolation,
     WaybillPlan,
 )
 
@@ -59,6 +63,24 @@ class MemberPipeline:
         self._matcher_descs: list[str] = [m.describe() for m in self._matchers]
         self._transformer_descs: list[str] = [t.describe() for t in self._transformers]
 
+        _all_validators = [build_validator(cfg) for cfg in member.validators]
+        self._validator_descs: list[str] = [v.describe() for v in _all_validators]
+        # Partition into stream-level and channel-level, preserving 1-based original indices
+        self._stream_validator_pairs: list[
+            tuple[WaybillStreamValidatorBase, str, int]
+        ] = [
+            (v, self._validator_descs[i], i + 1)
+            for i, v in enumerate(_all_validators)
+            if isinstance(v, WaybillStreamValidatorBase)
+        ]
+        self._channel_validator_pairs: list[
+            tuple[WaybillChannelValidatorBase, str, int]
+        ] = [
+            (v, self._validator_descs[i], i + 1)
+            for i, v in enumerate(_all_validators)
+            if isinstance(v, WaybillChannelValidatorBase)
+        ]
+
     def required_fields(self) -> set[str]:
         return self._required_fields
 
@@ -88,6 +110,7 @@ class MemberPipeline:
             defaultdict(list)
         )
         dropped_records: list[DroppedRecord] = []
+        all_violations: list[ValidatorViolation] = []
 
         transformer_pairs = list(
             zip(
@@ -150,8 +173,20 @@ class MemberPipeline:
                         ),
                     )
                 )
+                # Stream-level validators run after transformation; violations are observational
+                for sv, desc, idx in self._stream_validator_pairs:
+                    if not sv.validate(working):
+                        all_violations.append(
+                            ValidatorViolation(
+                                validator_index=idx,
+                                validator_desc=desc,
+                                action=sv.action,
+                                scope="stream",
+                                target=working.name,
+                            )
+                        )
 
-        return assemble_member_plan(
+        member_plan = assemble_member_plan(
             member_name=self._member.name,
             matcher_descs=self._matcher_descs,
             transformer_descs=self._transformer_descs,
@@ -159,6 +194,26 @@ class MemberPipeline:
             dropped=dropped_records,
             effective_stream_profile=self._effective_stream_profile,
             effective_order_streams_by=self._effective_order_streams_by,
+        )
+
+        # Channel-level validators run post-assembly against each assembled channel
+        for cv, desc, idx in self._channel_validator_pairs:
+            for channel in member_plan.channels:
+                if not cv.validate(channel.name, channel.streams):
+                    all_violations.append(
+                        ValidatorViolation(
+                            validator_index=idx,
+                            validator_desc=desc,
+                            action=cv.action,
+                            scope="channel",
+                            target=channel.name,
+                        )
+                    )
+
+        return replace(
+            member_plan,
+            validator_descs=self._validator_descs,
+            violations=all_violations,
         )
 
 

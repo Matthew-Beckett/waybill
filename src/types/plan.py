@@ -37,6 +37,10 @@ def _empty_str_list() -> list[str]:
     return []
 
 
+def _empty_violations() -> list["ValidatorViolation"]:
+    return []
+
+
 @dataclass(frozen=True)
 class TransformStep:
     """Records the effect of a single transformer step on a stream name."""
@@ -53,6 +57,17 @@ class DroppedRecord:
 
     original_name: str
     steps: list[TransformStep] = field(default_factory=_empty_transform_steps)
+
+
+@dataclass(frozen=True)
+class ValidatorViolation:
+    """A single validator assertion that was not satisfied."""
+
+    validator_index: int  # 1-based index into the member's validators list
+    validator_desc: str
+    action: str  # "warn" or "fail"
+    scope: str  # "stream" or "channel"
+    target: str  # transformed stream name or channel name
 
 
 @dataclass(frozen=True)
@@ -85,8 +100,10 @@ class MemberPlan:
     member_name: str
     matcher_descs: list[str] = field(default_factory=_empty_str_list)
     transformer_descs: list[str] = field(default_factory=_empty_str_list)
+    validator_descs: list[str] = field(default_factory=_empty_str_list)
     channels: list[ChannelPlan] = field(default_factory=_empty_channel_plans)
     dropped: list[DroppedRecord] = field(default_factory=_empty_dropped_records)
+    violations: list[ValidatorViolation] = field(default_factory=_empty_violations)
 
     @property
     def dropped_count(self) -> int:
@@ -113,3 +130,13 @@ class ProfilePlan:
 class WaybillPlan:
     manifest_name: str
     profiles: list[ProfilePlan] = field(default_factory=_empty_profile_plans)
+
+    def has_failures(self) -> bool:
+        """Return True if any violation across all members has action == 'fail'."""
+        return any(
+            v.action == "fail"
+            for profile in self.profiles
+            for group in profile.groups
+            for member in group.members
+            for v in member.violations
+        )

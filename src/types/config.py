@@ -27,6 +27,10 @@ def _empty_members() -> list["ConfigMember"]:
     return []
 
 
+def _empty_validators() -> list["ConfigValidator"]:
+    return []
+
+
 def _empty_str_group_dict() -> dict[str, "ConfigGroup"]:
     return {}
 
@@ -62,6 +66,26 @@ class CardinalOutputType(Enum):
 
 class OrderStreamsBy(Enum):
     QUALITY = "quality"
+
+
+class ValidatorType(Enum):
+    COUNT = "count"
+    REGEX_MATCH = "regexMatch"
+    NON_EMPTY = "nonEmpty"
+
+
+class ValidatorAction(Enum):
+    WARN = "warn"
+    FAIL = "fail"
+
+
+class ValidatorOperator(Enum):
+    GT = "gt"
+    GTE = "gte"
+    LT = "lt"
+    LTE = "lte"
+    EQ = "eq"
+    NEQ = "neq"
 
 
 @dataclass(frozen=True)
@@ -161,6 +185,67 @@ class ConfigMatcher:
         self.transformers = [_to_transformer(item) for item in self.transformers]
 
 
+@dataclass(frozen=True)
+class ConfigValidator:
+    type: ValidatorType
+    action: ValidatorAction = ValidatorAction.WARN
+    operator: ValidatorOperator = ValidatorOperator.GT
+    value: int = 0
+    pattern: str = ""
+    # NOTE: `field` must be last — it shadows the dataclasses.field() import after this line
+    field: str = "name"
+
+
+def _to_validator(
+    item: "ConfigValidator | Mapping[str, Any]",
+) -> "ConfigValidator":
+    """Coerce a raw mapping (from YAML) or an existing ConfigValidator into a ConfigValidator."""
+    if isinstance(item, ConfigValidator):
+        return item
+
+    raw_type = item.get("type", "")
+    validator_type = (
+        raw_type
+        if isinstance(raw_type, ValidatorType)
+        else ValidatorType(str(raw_type))
+    )
+
+    raw_action = item.get("action", ValidatorAction.WARN)
+    validator_action: ValidatorAction
+    if isinstance(raw_action, ValidatorAction):
+        validator_action = raw_action
+    else:
+        validator_action = (
+            ValidatorAction(str(raw_action)) if raw_action else ValidatorAction.WARN
+        )
+
+    raw_operator = item.get("operator", ValidatorOperator.GT)
+    validator_operator: ValidatorOperator
+    if isinstance(raw_operator, ValidatorOperator):
+        validator_operator = raw_operator
+    else:
+        validator_operator = (
+            ValidatorOperator(str(raw_operator))
+            if raw_operator
+            else ValidatorOperator.GT
+        )
+
+    raw_value = item.get("value", 0)
+    try:
+        validator_value = int(raw_value)
+    except (TypeError, ValueError):
+        validator_value = 0
+
+    return ConfigValidator(
+        type=validator_type,
+        action=validator_action,
+        operator=validator_operator,
+        value=validator_value,
+        pattern=str(item.get("pattern", "")),
+        field=str(item.get("field", "name")),
+    )
+
+
 def _to_order_streams_by(raw: Any) -> "OrderStreamsBy | None":
     """Coerce a raw YAML value to OrderStreamsBy, or None if absent."""
     if raw is None or raw == "":
@@ -175,12 +260,14 @@ class ConfigMember:
     name: str
     matchers: list[ConfigMatcher] = field(default_factory=_empty_matchers)
     transformers: list[ConfigTransformer] = field(default_factory=_empty_transformers)
+    validators: list[ConfigValidator] = field(default_factory=_empty_validators)
     stream_profile: str | None = None
     order_streams_by: OrderStreamsBy | None = None
 
     def __post_init__(self):
         self.matchers = [self._to_matcher(item) for item in self.matchers]
         self.transformers = [_to_transformer(item) for item in self.transformers]
+        self.validators = [_to_validator(item) for item in self.validators]
 
     @staticmethod
     def _to_matcher(item: ConfigMatcher | Mapping[str, Any]) -> ConfigMatcher:
@@ -275,10 +362,18 @@ class ConfigGroup:
             else _empty_transformers()
         )
 
+        raw_validators = item.get("validators", [])
+        validators = (
+            cast(list[ConfigValidator], raw_validators)
+            if isinstance(raw_validators, list)
+            else _empty_validators()
+        )
+
         return ConfigMember(
             name=str(item.get("name", "")),
             matchers=matchers,
             transformers=transformers,
+            validators=validators,
             stream_profile=item.get("streamProfile") or None,
             order_streams_by=_to_order_streams_by(item.get("orderStreamsBy")),
         )

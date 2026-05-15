@@ -37,6 +37,7 @@ from src.types.config import (
     ConfigProfile,
     ConfigSpec,
     ConfigTransformer,
+    ConfigValidator,
     WaybillConfig,
 )
 
@@ -79,7 +80,7 @@ CLASS_DESCRIPTIONS: dict[type, str] = {
         "A named profile grouping channel groups, with an optional default stream profile"
     ),
     ConfigGroup: "A channel group that maps to a Dispatcharr ChannelGroup",
-    ConfigMember: "A channel member with sequential matcher and transformer rules",
+    ConfigMember: "A channel member with sequential matcher, transformer, and validator rules",
     ConfigMatcher: (
         "A filter rule evaluated against each input stream; "
         "matchers run in order and can keep or drop streams"
@@ -87,6 +88,10 @@ CLASS_DESCRIPTIONS: dict[type, str] = {
     ConfigTransformer: (
         "A mutation rule applied to a stream field value or explicit metadata fields; "
         "transformers run in order after all matchers pass"
+    ),
+    ConfigValidator: (
+        "A post-transformation assertion applied to individual streams or assembled channels; "
+        "violations are surfaced as warnings or halt execution as failures"
     ),
 }
 
@@ -125,6 +130,11 @@ FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
     ),
     (ConfigMember, "matchers"): "Ordered matchers used to filter input streams",
     (ConfigMember, "transformers"): "Ordered transformers applied to matched streams",
+    (ConfigMember, "validators"): (
+        "Post-transformation validators that assert conditions on individual streams "
+        "(scope: stream) or on assembled channels (scope: channel); "
+        "violations are logged as warnings or raise a failure before any database write"
+    ),
     (ConfigMatcher, "type"): "Matching algorithm",
     (ConfigMatcher, "action"): "Whether matched streams are kept or dropped",
     (
@@ -172,6 +182,26 @@ FIELD_DESCRIPTIONS: dict[tuple[type, str], str] = {
     (ConfigTransformer, "logo_url"): "Logo URL value to assign (type: setMetadata)",
     (ConfigTransformer, "tvg_id"): "TVG ID value to assign (type: setMetadata)",
     (ConfigTransformer, "field"): "Stream field to transform (e.g. 'name', 'tvg_id')",
+    (ConfigValidator, "type"): "Validation algorithm",
+    (ConfigValidator, "action"): (
+        "Response when the assertion is violated — "
+        "'warn' logs a warning; 'fail' logs an error and stops execution before any database write"
+    ),
+    (ConfigValidator, "operator"): (
+        "Comparison operator applied to the stream count (type: count); "
+        "one of: gt, gte, lt, lte, eq, neq"
+    ),
+    (
+        ConfigValidator,
+        "value",
+    ): "Integer to compare the stream count against (type: count)",
+    (ConfigValidator, "pattern"): (
+        "Regular expression the field value must match (type: regexMatch)"
+    ),
+    (ConfigValidator, "field"): (
+        "Stream field to evaluate (type: regexMatch, nonEmpty); "
+        "e.g. 'name', 'tvg_id', 'logo_url'"
+    ),
 }
 
 EXPORT_CLASSES: list[type] = [
@@ -183,6 +213,7 @@ EXPORT_CLASSES: list[type] = [
     ConfigMember,
     ConfigMatcher,
     ConfigTransformer,
+    ConfigValidator,
 ]
 
 

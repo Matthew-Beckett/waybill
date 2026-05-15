@@ -35,6 +35,10 @@ class WaybillActionError(WaybillError):
     """Raised when an unsupported action is requested."""
 
 
+class WaybillValidationError(WaybillError):
+    """Raised when one or more fail-action validators are violated."""
+
+
 class WaybillLogger(Protocol):
     def info(self, message: str) -> None: ...
 
@@ -128,6 +132,18 @@ class Plugin(DispatcharrPlugin):
         formatter = WaybillPlanFormatter()
         for line in formatter.format(plan):
             logger.info(line)
+        if plan.has_failures():
+            fail_count = sum(
+                1
+                for profile in plan.profiles
+                for group in profile.groups
+                for member in group.members
+                for v in member.violations
+                if v.action == "fail"
+            )
+            raise WaybillValidationError(
+                f"Validation failed: {fail_count} fail violation(s) detected"
+            )
 
     def _run_apply(
         self,
@@ -148,6 +164,21 @@ class Plugin(DispatcharrPlugin):
         )
         pipeline = WaybillPipeline(self.configuration)
         plan = pipeline.compute_plan()
+        if plan.has_failures():
+            fail_count = sum(
+                1
+                for profile in plan.profiles
+                for group in profile.groups
+                for member in group.members
+                for v in member.violations
+                if v.action == "fail"
+            )
+            formatter = WaybillPlanFormatter()
+            for line in formatter.format(plan):
+                logger.error(line)
+            raise WaybillValidationError(
+                f"Validation failed: {fail_count} fail violation(s) detected — database not modified"
+            )
         applier = WaybillApplier(plan, mode, logger)
         applier.apply()
 

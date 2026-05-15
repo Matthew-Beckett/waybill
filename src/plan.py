@@ -137,6 +137,8 @@ class WaybillPlanFormatter:
                         lines.append(f"      Matcher [{i}]: {desc}")
                     for i, desc in enumerate(member.transformer_descs, 1):
                         lines.append(f"      Transformer [T{i}]: {desc}")
+                    for i, desc in enumerate(member.validator_descs, 1):
+                        lines.append(f"      Validator [V{i}]: {desc}")
                     for channel in member.channels:
                         stream_count = len(channel.streams)
                         total_channels += 1
@@ -179,6 +181,13 @@ class WaybillPlanFormatter:
                                     lines.append(
                                         f'          [T{step.transformer_index}] "{step.name_in}" → "{step.name_out}"'
                                     )
+                        # Channel-scoped violations for this channel
+                        for v in member.violations:
+                            if v.scope == "channel" and v.target == channel.name:
+                                tag = "[FAIL]" if v.action == "fail" else "[WARN]"
+                                lines.append(
+                                    f"        {tag} [V{v.validator_index}]: {v.validator_desc}"
+                                )
                     if member.dropped:
                         lines.append(f"      Dropped: {member.dropped_count} stream(s)")
                         for rec in member.dropped:
@@ -196,6 +205,19 @@ class WaybillPlanFormatter:
                                     lines.append(
                                         f'          [T{step.transformer_index}] "{step.name_in}" → "{step.name_out}"'
                                     )
+                    # Stream-scoped violations for this member (grouped)
+                    stream_violations = [
+                        v for v in member.violations if v.scope == "stream"
+                    ]
+                    if stream_violations:
+                        lines.append(
+                            f"      Violations: {len(stream_violations)} stream validation(s)"
+                        )
+                        for v in stream_violations:
+                            tag = "[FAIL]" if v.action == "fail" else "[WARN]"
+                            lines.append(
+                                f'        {tag} [V{v.validator_index}] "{v.target}": {v.validator_desc}'
+                            )
 
         profile_count = len(plan.profiles)
         lines.append(

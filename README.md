@@ -9,7 +9,7 @@ Waybill reads a **WaybillConfig** manifest and produces a reconciled channel lis
 - **Plan** — preview the desired state without writing anything to the database.
 - **Apply** — write the desired state to the database, in `upsert` or `overwrite` mode.
 
-Channels are selected from Dispatcharr's stream catalogue using **matchers** and then renamed / normalised using **transformers**. Stream profiles are assigned per channel with a three-level inheritance hierarchy.
+Channels are selected from Dispatcharr's stream catalogue using **matchers**, renamed / normalised using **transformers**, and then checked against **validators** to assert expected conditions. Stream profiles are assigned per channel with a three-level inheritance hierarchy.
 
 ## Motivation
 
@@ -260,6 +260,87 @@ Converts between digit and word forms of cardinal numbers (e.g. `ONE ↔ 1`).
 
 ---
 
+## Validators
+
+Validators run after all transformers have been applied and assert simple conditions about the resulting streams or channels. They are **observational-only** — they never drop a stream or channel. A violation either logs a warning (`action: warn`) or logs an error and halts execution before any database write (`action: fail`).
+
+Validators are declared on a member, alongside `matchers` and `transformers`:
+
+```yaml
+- name: My Channel
+  matchers: [...]
+  transformers: [...]
+  validators:
+    - type: count
+      operator: gt
+      value: 0
+      action: fail
+```
+
+| Type | Scope | Description |
+|---|---|---|
+| `count` | channel | Asserts that the number of streams in an assembled channel satisfies a numeric comparison |
+| `regexMatch` | stream | Asserts that a stream field matches a regular expression after transformation |
+| `nonEmpty` | stream | Asserts that a stream field is non-empty after transformation |
+
+**Scopes:**
+- **stream** — evaluated once per transformed stream before channel assembly
+- **channel** — evaluated once per assembled channel, after all streams have been grouped
+
+Violations are printed in the plan output alongside the channel or stream that triggered them, and summarised in the `=== Summary ===` section.
+
+### `count`
+
+Asserts that the number of streams resolved for a channel satisfies `count <operator> <value>`.
+The most common use-case is asserting the count is greater than zero — an immediate signal of a feed outage or upstream name change.
+
+```yaml
+- type: count
+  operator: gt
+  value: 0
+  action: warn
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `operator` | yes | One of: `gt`, `gte`, `lt`, `lte`, `eq`, `neq` |
+| `value` | yes | Integer to compare the count against |
+| `action` | no (default: `warn`) | `warn` or `fail` |
+
+### `regexMatch`
+
+Asserts that a stream field matches a regular expression after transformation. Useful for catching transformer regressions where a pipeline silently produces an unexpected name.
+
+```yaml
+- type: regexMatch
+  field: name
+  pattern: "^BBC [1-9]"
+  action: fail
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `pattern` | yes | Python regular expression |
+| `field` | no (default: `name`) | Stream attribute to evaluate |
+| `action` | no (default: `warn`) | `warn` or `fail` |
+
+### `nonEmpty`
+
+Asserts that a stream field is non-empty. Useful for ensuring streams carry EPG or logo metadata before they are written to Dispatcharr.
+
+```yaml
+- type: nonEmpty
+  field: tvg_id
+  action: warn
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `field` | no (default: `name`) | Stream attribute to check |
+| `action` | no (default: `warn`) | `warn` or `fail` |
+
+---
+
 ## Apply modes
 
 | Mode | Behaviour |
@@ -282,6 +363,7 @@ The `examples/` directory contains annotated manifests covering every feature:
 | [05-stream-profiles.yaml](examples/05-stream-profiles.yaml) | Stream profile inheritance (profile → group → member) |
 | [06-multiple-profiles.yaml](examples/06-multiple-profiles.yaml) | Multiple independent profiles in one manifest |
 | [07-exhaustive.yaml](examples/07-exhaustive.yaml) | Every schema feature in one manifest |
+| [08-validators.yaml](examples/08-validators.yaml) | All three validator types with both action levels and combined validator suites |
 
 ---
 
