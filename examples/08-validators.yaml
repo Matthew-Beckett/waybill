@@ -1,0 +1,212 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: validators-example
+  description: >
+    Demonstrates all three validator types (count, regexMatch, nonEmpty) with both
+    action levels (warn, fail), stream-scoped and channel-scoped assertions, and
+    combining multiple validators on a single member.
+spec:
+  profiles:
+    default:
+      name: Default
+      groups:
+
+        count_validators:
+          name: Count Validators
+          members:
+
+            - name: Arena Sports (count gt 0 — warn)
+              # The most common use-case from the issue: alert if no streams were matched,
+              # which almost always indicates a feed outage or an upstream name change.
+              # action: warn means the violation is logged but execution continues.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^DEMO\\| Arena Sports.*"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: warn
+
+            - name: NBS News (count gt 0 — fail)
+              # action: fail logs the violation, renders it in the plan, then raises an
+              # error before any database write (or before plan exits cleanly).
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "NBS NEWS"
+                    - "NBS News"
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS News"
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: fail
+
+            - name: Vista One HD (count lte 3 — warn)
+              # Assert an upper bound: more than 3 streams for a single channel usually
+              # means a matcher is too broad and is capturing unrelated feeds.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Vista One"
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: ".*\\bSD\\b.*"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+              validators:
+                - type: count
+                  operator: lte
+                  value: 3
+                  action: warn
+
+        regex_match_validators:
+          name: RegexMatch Validators
+          members:
+
+            - name: Apex TV (regexMatch on name — warn)
+              # After transformation, assert the channel name looks as expected.
+              # A violation warns you that a transformer silently produced an unexpected value.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "DEMO| Apex TV"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+              validators:
+                - type: regexMatch
+                  field: name
+                  pattern: "^Apex TV"
+                  action: warn
+
+            - name: NBS 1-4 (regexMatch on name — fail)
+              # A strict brand-name check: any transformed name that doesn't match is
+              # a hard failure — it means the transformation pipeline drifted from spec.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
+              transformers:
+                - type: convertCardinalNumbers
+                  field: name
+                  outputType: number
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
+                  replacement: "$1"
+              validators:
+                - type: regexMatch
+                  field: name
+                  pattern: "^NBS [1-4]$"
+                  action: fail
+
+        non_empty_validators:
+          name: NonEmpty Validators
+          members:
+
+            - name: Arena Sports EPG check (nonEmpty tvg_id — warn)
+              # Assert that streams carry EPG metadata after transformation.
+              # A violation means streams will appear in Dispatcharr without guide data.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^DEMO\\| Arena Sports.*"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^DEMO\\| "
+                  replacement: ""
+              validators:
+                - type: nonEmpty
+                  field: tvg_id
+                  action: warn
+
+            - name: NBS News logo + EPG (nonEmpty — fail)
+              # Require both logo_url and tvg_id to be non-empty; a missing value is a
+              # hard failure because NBS News must always have both in this profile.
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  substrings:
+                    - "NBS NEWS"
+                    - "NBS News"
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS News"
+              validators:
+                - type: nonEmpty
+                  field: tvg_id
+                  action: fail
+                - type: nonEmpty
+                  field: logo_url
+                  action: fail
+
+        combined_validators:
+          name: Combined Validators
+          members:
+
+            - name: NBS Four (count + regexMatch + nonEmpty)
+              # All three validator types together as a complete sanity-check suite:
+              #   1. At least one stream must be matched (count).
+              #   2. The final channel name must be exactly "NBS 4" (regexMatch).
+              #   3. Every stream must carry EPG metadata (nonEmpty).
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  values:
+                    - "demo| nbs four hd"
+                    - "demo| nbs four"
+                    - "demo| nbs 4 hd"
+                    - "demo| nbs 4"
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS 4"
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: fail
+                - type: regexMatch
+                  field: name
+                  pattern: "^NBS 4$"
+                  action: fail
+                - type: nonEmpty
+                  field: tvg_id
+                  action: warn
