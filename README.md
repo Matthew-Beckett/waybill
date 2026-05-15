@@ -170,10 +170,11 @@ Transformers rewrite stream fields after matching. They are applied in declarati
 |---|---|
 | `regex` | Replace a regex match (supports capture-group back-references) |
 | `strip` | Remove a fixed prefix and/or suffix |
-| `set` | Overwrite the field with a literal value |
+| `setMetadata` | Set explicit metadata fields (`name`, `logoUrl`, `tvgId`) in one step |
+| `set` | Overwrite an arbitrary field with a literal value (low-level escape hatch) |
 | `convertCardinalNumbers` | Convert between word and digit forms of cardinal numbers |
 
-All transformers share:
+Transformers that target a single stream field (`regex`, `strip`, `set`, `convertCardinalNumbers`) share:
 
 | Field | Default | Description |
 |---|---|---|
@@ -221,6 +222,28 @@ All transformers share:
 |---|---|---|
 | `value` | yes | Literal value to write to the field |
 
+`set` is intentionally low-level and can write to arbitrary fields. Prefer `setMetadata`
+for common metadata assignments where field names are explicit.
+
+### `setMetadata`
+
+Sets one or more explicit metadata fields in a single transformer.
+
+```yaml
+- type: setMetadata
+  name: "BBC One"
+  logoUrl: "https://example.com/logos/bbc-one.png"
+  tvgId: "bbc.one.uk"
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | no | Canonical stream name |
+| `logoUrl` | no | Logo URL to write to `logo_url` |
+| `tvgId` | no | TV guide identifier to write to `tvg_id` |
+
+At least one of `name`, `logoUrl`, or `tvgId` must be provided.
+
 ### `convertCardinalNumbers`
 
 Converts between digit and word forms of cardinal numbers (e.g. `ONE ↔ 1`).
@@ -254,7 +277,7 @@ The `examples/` directory contains annotated manifests covering every feature:
 |---|---|
 | [01-minimal.yaml](examples/01-minimal.yaml) | Minimum valid manifest |
 | [02-matchers.yaml](examples/02-matchers.yaml) | All four matcher types, keep/drop actions, field targeting |
-| [03-transformers.yaml](examples/03-transformers.yaml) | All four transformer types including multi-step pipelines |
+| [03-transformers.yaml](examples/03-transformers.yaml) | All five transformer types including multi-step pipelines |
 | [04-pre-transformers.yaml](examples/04-pre-transformers.yaml) | Transformers scoped inside a matcher |
 | [05-stream-profiles.yaml](examples/05-stream-profiles.yaml) | Stream profile inheritance (profile → group → member) |
 | [06-multiple-profiles.yaml](examples/06-multiple-profiles.yaml) | Multiple independent profiles in one manifest |
@@ -288,3 +311,5 @@ pre-commit run -a
 ```
 
 The JSON Schema at `schema/config.schema.json` can be referenced by editors (e.g. VS Code with the [YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml)) to get inline validation and autocompletion when writing manifests.
+
+Do not hand-edit `schema/config.schema.json`; always regenerate it from the source types and descriptions in `src/types/config.py` and `generate_schema.py`.
