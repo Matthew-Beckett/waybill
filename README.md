@@ -23,7 +23,7 @@ Waybill provides no mechanism for fragile matchers or transformers such as those
 
 ### AI Disclosure
 
-There is some Clanker output in this repository, mainly examples, documentation and the tooling for generating the config JSON Schema. These seemed like parts there's be zero value in me writing myself.
+There is some Clanker output in this repository, mainly examples, documentation, unit tests and the tooling for generating the config JSON Schema. These seemed like parts there's be zero value in me writing myself.
 
 However, almost all of the rest of the code is written by me, by hand, and then reviewed by Clankers. The config spec was designed by a human and it's interface was built with humans in mind.
 

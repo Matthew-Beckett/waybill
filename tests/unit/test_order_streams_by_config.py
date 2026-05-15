@@ -57,66 +57,48 @@ def _profile_dict(
     }
 
 
-# Profile-level coercion
-
-
-def test_profile_order_streams_by_quality() -> None:
-    cfg = _make_config(_profile_dict(profile_osb="quality"))
+def _at_scope(cfg: WaybillConfig, scope: str):
     profile = cfg.spec.profiles["p"]
-    assert profile.order_streams_by is OrderStreamsBy.QUALITY
+    if scope == "profile":
+        return profile
+    group = profile.groups["g"]
+    if scope == "group":
+        return group
+    return group.members[0]
 
 
-def test_profile_order_streams_by_none_when_absent() -> None:
+_OSB_KWARG = {
+    "profile": "profile_osb",
+    "group": "group_osb",
+    "member": "member_osb",
+}
+
+
+# Per-scope coercion
+
+
+@pytest.mark.parametrize("scope", ["profile", "group", "member"])
+def test_order_streams_by_quality(scope: str) -> None:
+    cfg = _make_config(_profile_dict(**{_OSB_KWARG[scope]: "quality"}))
+    assert _at_scope(cfg, scope).order_streams_by is OrderStreamsBy.QUALITY
+
+
+@pytest.mark.parametrize("scope", ["profile", "group", "member"])
+def test_order_streams_by_none_when_absent(scope: str) -> None:
     cfg = _make_config(_profile_dict())
-    assert cfg.spec.profiles["p"].order_streams_by is None
+    assert _at_scope(cfg, scope).order_streams_by is None
 
 
-def test_profile_order_streams_by_null_yaml() -> None:
-    cfg = _make_config(_profile_dict(profile_osb=None))
-    assert cfg.spec.profiles["p"].order_streams_by is None
+@pytest.mark.parametrize("scope", ["profile", "group", "member"])
+def test_order_streams_by_null_yaml(scope: str) -> None:
+    cfg = _make_config(_profile_dict(**{_OSB_KWARG[scope]: None}))
+    assert _at_scope(cfg, scope).order_streams_by is None
 
 
-def test_profile_order_streams_by_invalid_raises() -> None:
+@pytest.mark.parametrize("scope", ["profile", "group", "member"])
+def test_order_streams_by_invalid_raises(scope: str) -> None:
     with pytest.raises(ValueError):
-        _make_config(_profile_dict(profile_osb="random"))
-
-
-# Group-level coercion
-
-
-def test_group_order_streams_by_quality() -> None:
-    cfg = _make_config(_profile_dict(group_osb="quality"))
-    group = cfg.spec.profiles["p"].groups["g"]
-    assert group.order_streams_by is OrderStreamsBy.QUALITY
-
-
-def test_group_order_streams_by_none_when_absent() -> None:
-    cfg = _make_config(_profile_dict())
-    assert cfg.spec.profiles["p"].groups["g"].order_streams_by is None
-
-
-def test_group_order_streams_by_null_yaml() -> None:
-    cfg = _make_config(_profile_dict(group_osb=None))
-    assert cfg.spec.profiles["p"].groups["g"].order_streams_by is None
-
-
-# Member-level coercion
-
-
-def test_member_order_streams_by_quality() -> None:
-    cfg = _make_config(_profile_dict(member_osb="quality"))
-    member = cfg.spec.profiles["p"].groups["g"].members[0]
-    assert member.order_streams_by is OrderStreamsBy.QUALITY
-
-
-def test_member_order_streams_by_none_when_absent() -> None:
-    cfg = _make_config(_profile_dict())
-    assert cfg.spec.profiles["p"].groups["g"].members[0].order_streams_by is None
-
-
-def test_member_order_streams_by_null_yaml() -> None:
-    cfg = _make_config(_profile_dict(member_osb=None))
-    assert cfg.spec.profiles["p"].groups["g"].members[0].order_streams_by is None
+        _make_config(_profile_dict(**{_OSB_KWARG[scope]: "random"}))
 
 
 # Inheritance chain
