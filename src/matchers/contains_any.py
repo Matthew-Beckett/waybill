@@ -37,3 +37,25 @@ class WaybillMatcherContainsAny(WaybillMatcherBase):
             field_value = field_value.lower()
         contains = any(s in field_value for s in self._substrings)
         return not contains if self.action == "drop" else contains
+
+    def match_and_capture(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "tuple[bool, dict[str, str]]":
+        """Match the stream after rendering each substring as a Jinja2 template.
+
+        Template expressions in substring values are rendered using *variables*,
+        allowing substring patterns to reference predefined pipeline variables.
+        """
+        variables_ctx: dict[str, str] = variables if variables is not None else {}
+        rendered_substrings = [
+            self._render_value(s, variables_ctx) for s in self._display_substrings
+        ]
+        field_value = self._get_field_value(stream, variables=variables_ctx)
+        if not self.case_sensitive:
+            field_value_cmp = field_value.lower()
+            rendered_substrings = [s.lower() for s in rendered_substrings]
+        else:
+            field_value_cmp = field_value
+        contains = any(s in field_value_cmp for s in rendered_substrings)
+        matched = not contains if self.action == "drop" else contains
+        return matched, {}

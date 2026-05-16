@@ -59,3 +59,26 @@ class TestWaybillTransformerSetMetadata:
         assert stream.name == "Configured Name"
         assert stream.logo_url == "https://configured.example.com/logo.png"
         assert stream.tvg_id == "configured.demo"
+
+    def test_renders_template_in_name(self, stream) -> None:
+        t = WaybillTransformerSetMetadata(name="{{ brand }} Channel")
+        t.transform(stream, variables={"brand": "NBS"})
+        assert stream.name == "NBS Channel"
+
+    def test_renders_template_in_tvg_id(self, stream) -> None:
+        t = WaybillTransformerSetMetadata(tvg_id="{{ ch_name }}.demo")
+        t.transform(stream, variables={"ch_name": "bbc"})
+        assert stream.tvg_id == "bbc.demo"
+
+    def test_undefined_template_variable_raises(self, stream) -> None:
+        t = WaybillTransformerSetMetadata(name="{{ missing }}")
+        with pytest.raises(ValueError, match="Undefined template variable"):
+            t.transform(stream, variables={})
+
+    def test_template_field_strings_exposes_fields(self) -> None:
+        t = WaybillTransformerSetMetadata(
+            name="{{ ch_name }}", tvg_id="{{ ch_name }}.demo"
+        )
+        pairs = dict(t.template_field_strings())
+        assert "{{ ch_name }}" in pairs.values()
+        assert "{{ ch_name }}.demo" in pairs.values()

@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 from apps.channels.models import Stream
 
+from .._jinja import render_template
+
 if TYPE_CHECKING:
     from ..transformers.base import WaybillTransformerBase
 
@@ -28,16 +30,30 @@ class WaybillMatcherBase(ABC):
         self.case_sensitive = case_sensitive
         self.pre_transformers: list = pre_transformers or []
 
-    def _get_field_value(self, stream: Stream) -> str:
+    def _get_field_value(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> str:
         """Return the field value after applying any pre-transformers."""
         if self.pre_transformers:
             working = copy(stream)
             for t in self.pre_transformers:
-                result = t.transform(working)
+                result = t.transform(working, variables=variables)
                 if result is not None:
                     working = result
             return getattr(working, self.field)
         return getattr(stream, self.field)
+
+    def _render_value(self, value: str, variables: "dict[str, str]") -> str:
+        """Render *value* as a Jinja2 template using the current variable scope.
+
+        Delegates to :func:`render_template` with a context description
+        identifying this matcher class.
+        """
+        return render_template(
+            value,
+            variables,
+            context_desc=f"{type(self).__name__} matcher",
+        )
 
     @abstractmethod
     def _describe_self(self) -> str:
@@ -46,6 +62,21 @@ class WaybillMatcherBase(ABC):
     @abstractmethod
     def match(self, stream: Stream) -> bool:
         """Return True if this matcher accepts the stream."""
+
+    def match_and_capture(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "tuple[bool, dict[str, str]]":
+        """Return ``(matched, captures)`` for this matcher.
+
+        The base implementation delegates to :meth:`match` and returns an empty
+        capture dict.  Subclasses that support named capture groups (e.g.
+        :class:`WaybillMatcherRegex`) override this to return the captures.
+
+        ``variables`` is the current accumulated variable scope; it is threaded
+        into pre-transformer calls so pre-transformers can reference earlier
+        captures.
+        """
+        return self.match(stream), {}
 
     def describe(self) -> str:
         """Return a human-readable description of this matcher, including action and pre-transformers."""

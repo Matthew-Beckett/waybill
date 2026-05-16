@@ -10,6 +10,7 @@ from .types.plan import (
     DroppedRecord,
     MemberPlan,
     StreamRecord,
+    VariableEvent,
     WaybillPlan,
 )
 
@@ -181,6 +182,10 @@ class WaybillPlanFormatter:
                                     lines.append(
                                         f'          [T{step.transformer_index}] "{step.name_in}" → "{step.name_out}"'
                                     )
+                            if stream.variable_events:
+                                lines.append("          Variable log:")
+                                for ev in stream.variable_events:
+                                    lines.extend(self._format_variable_event(ev))
                         # Channel-scoped violations for this channel
                         for v in member.violations:
                             if v.scope == "channel" and v.target == channel.name:
@@ -236,3 +241,26 @@ class WaybillPlanFormatter:
             f"=== Summary: {total_channels} channel(s) across {profile_count} profile(s) ==="
         )
         return lines
+
+    @staticmethod
+    def _format_variable_event(ev: "VariableEvent") -> "list[str]":
+        """Return one or two log lines for a single :class:`VariableEvent`."""
+        prefix = "            "
+        match ev.event_type:
+            case "init":
+                return [f'{prefix}[init]      {ev.name} = "{ev.value}"  ({ev.source})']
+            case "capture_override":
+                old = ev.old_value if ev.old_value is not None else ""
+                return [
+                    f'{prefix}[override]  {ev.name}: "{old}" \u2192 "{ev.value}"  ({ev.source})'
+                ]
+            case "capture_discarded":
+                return [
+                    f'{prefix}[discarded] {ev.name} = "{ev.value}"  ({ev.source}, not in scope)'
+                ]
+            case "template_read":
+                return [f'{prefix}[read]      {ev.name} = "{ev.value}"  ({ev.source})']
+            case _:
+                return [
+                    f'{prefix}[{ev.event_type}] {ev.name} = "{ev.value}"  ({ev.source})'
+                ]

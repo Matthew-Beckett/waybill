@@ -11,7 +11,7 @@ from .base import WaybillTransformerBase
 # "and" is intentionally excluded: it may only appear *inside* an existing span
 # (e.g. "one hundred and one") because word2number silently accepts leading
 # "and" — allowing it to start a span would silently consume "and" in phrases
-# like "BBC One and ITV Two".
+# like "NBS One and VTN Two".
 _NUMBER_WORDS_LEADING: frozenset[str] = frozenset(
     [
         "zero",
@@ -118,7 +118,7 @@ def _scan_and_replace_number_words(text: str, word_to_num_fn) -> str:
         # Greedy longest-match conversion, shrinking from the right.
         # Skip any candidate whose last word is "and": word2number silently
         # drops trailing "and" connectors, which would produce incorrect
-        # truncations such as "One And [ITV]" → "1".
+        # truncations such as "One And [VTN]" → "1".
         matched = 0
         converted: str | None = None
         for length in range(len(words), 0, -1):
@@ -169,7 +169,9 @@ class WaybillTransformerConvertCardinalNumbers(WaybillTransformerBase):
         except ValueError:
             return num
 
-    def transform(self, stream: Stream) -> Stream | None:
+    def transform(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "Stream | None":
         value = getattr(stream, self.field)
         match self.output_type:
             case "number":

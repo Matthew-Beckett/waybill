@@ -96,6 +96,12 @@
             }
           ],
           "description": "Default stream ordering applied to every channel in this profile"
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ConfigVariable"
+          }
         }
       },
       "additionalProperties": false
@@ -135,6 +141,12 @@
             }
           ],
           "description": "Stream ordering override for this group (overrides profile-level setting)"
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ConfigVariable"
+          }
         }
       },
       "required": [
@@ -191,6 +203,12 @@
             }
           ],
           "description": "Stream ordering override for this member's channels (overrides group- and profile-level settings)"
+        },
+        "variables": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ConfigVariable"
+          }
         }
       },
       "required": [
@@ -277,7 +295,8 @@
             "regex",
             "strip",
             "set",
-            "setMetadata"
+            "setMetadata",
+            "template"
           ],
           "description": "Transformation algorithm"
         },

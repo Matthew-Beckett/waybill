@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from apps.channels.models import Stream
 
+from ._jinja import extract_template_variables
 from .matchers import build_matcher, build_q_filter
 from .matchers.base import WaybillMatcherBase
 from .transformers import build_transformer
@@ -18,6 +19,7 @@ from .validators.base import (
 from .types.config import (
     ConfigMember,
     ConfigProfile,
+    ConfigVariable,
     OrderStreamsBy,
     WaybillConfig,
 )
@@ -30,6 +32,7 @@ from .types.plan import (
     StreamRecord,
     TransformStep,
     ValidatorViolation,
+    VariableEvent,
     WaybillPlan,
 )
 
@@ -44,6 +47,7 @@ class MemberPipeline:
         member: ConfigMember,
         inherited_stream_profile: "str | None" = None,
         inherited_order_streams_by: "OrderStreamsBy | None" = None,
+        inherited_variables: "dict[str, ConfigVariable] | None" = None,
     ) -> None:
         self._member = member
         self._effective_stream_profile: str | None = (
@@ -52,6 +56,11 @@ class MemberPipeline:
         self._effective_order_streams_by: OrderStreamsBy | None = (
             member.order_streams_by or inherited_order_streams_by
         )
+        # Outer scope variables; shadowed by member-level definitions.
+        self._predefined_vars_config: dict[str, ConfigVariable] = {
+            **(inherited_variables or {}),
+            **member.variables,
+        }
         self._matchers: list[WaybillMatcherBase] = [
             build_matcher(cfg) for cfg in member.matchers
         ]
@@ -95,7 +104,92 @@ class MemberPipeline:
     def required_fields(self) -> set[str]:
         return self._required_fields
 
-    def matches(self, stream: Stream) -> bool:
+    def _match_and_collect_captures(
+        self,
+        stream: "Stream",
+        predefined_values: "dict[str, str]",
+        matcher_descs: "list[str]",
+    ) -> "tuple[bool, dict[str, str], dict[str, str], list[VariableEvent]]":
+        """Run all matchers against *stream*, collecting named capture groups.
+
+        Returns ``(True, declared_vars, acc_vars, events)`` when all matchers
+        accept the stream.
+
+        - ``declared_vars`` contains only captures whose group name matches a
+          key declared in the member's resolved variables block (profile/group/
+          member scope).  This is the dict passed to main transformers.
+        - ``acc_vars`` is the full accumulated scope (predefined + **all**
+          captures regardless of declaration).  It is threaded through
+          subsequent matcher ``match_and_capture`` calls so pre-transformers
+          can reference any earlier capture.
+        - ``events`` is a list of :class:`VariableEvent` records for plan logging.
+
+        Returns ``(False, {}, {}, [])`` as soon as any matcher rejects the
+        stream.
+
+        Raises ``ValueError`` if a capture group name collides with an
+        immutable predefined variable.
+        """
+        events: list[VariableEvent] = []
+
+        # Emit init events for all predefined variables.
+        for name, value in predefined_values.items():
+            events.append(
+                VariableEvent(
+                    name=name,
+                    event_type="init",
+                    value=value,
+                    source="predefined",
+                )
+            )
+
+        acc_vars: dict[str, str] = dict(predefined_values)
+
+        for idx, matcher in enumerate(self._matchers, 1):
+            accepted, captures = matcher.match_and_capture(stream, variables=acc_vars)
+            if not accepted:
+                return False, {}, {}, []
+            for name, value in captures.items():
+                existing = self._predefined_vars_config.get(name)
+                if existing is not None and not existing.mutable:
+                    raise ValueError(
+                        f"Named capture group {name!r} conflicts with immutable "
+                        f"predefined variable in member {self._member.name!r}"
+                    )
+                desc = (
+                    matcher_descs[idx - 1]
+                    if idx - 1 < len(matcher_descs)
+                    else f"matcher #{idx}"
+                )
+                if name in self._predefined_vars_config:
+                    events.append(
+                        VariableEvent(
+                            name=name,
+                            event_type="capture_override",
+                            value=value,
+                            old_value=acc_vars.get(name),
+                            source=f"matcher #{idx} ({desc})",
+                        )
+                    )
+                else:
+                    events.append(
+                        VariableEvent(
+                            name=name,
+                            event_type="capture_discarded",
+                            value=value,
+                            source=f"matcher #{idx} ({desc})",
+                        )
+                    )
+                acc_vars[name] = value
+
+        # Only captures whose group name is declared in a variables block at any
+        # scope level (profile/group/member) are forwarded to main transformers.
+        declared_vars: dict[str, str] = {
+            k: v for k, v in acc_vars.items() if k in self._predefined_vars_config
+        }
+        return True, declared_vars, acc_vars, events
+
+    def matches(self, stream: "Stream") -> bool:
         """Return True only if ALL matchers accept the stream."""
         return all(m.match(stream) for m in self._matchers)
 
@@ -131,9 +225,20 @@ class MemberPipeline:
             )
         )
 
+        # Resolve predefined variable values once per process() call.
+        predefined_values: dict[str, str] = {
+            name: var.value for name, var in self._predefined_vars_config.items()
+        }
+
         for stream in qs:
-            # Precise Python match — guards against ORM iregex false positives
-            if not self.matches(stream):
+            # Precise Python match — guards against ORM iregex false positives.
+            # _match_and_collect_captures also builds the per-stream variable context.
+            matched, declared_vars, _acc_vars, var_events = (
+                self._match_and_collect_captures(
+                    stream, predefined_values, self._matcher_descs
+                )
+            )
+            if not matched:
                 continue
 
             original_name = stream.name
@@ -143,8 +248,22 @@ class MemberPipeline:
             was_dropped = False
 
             for transformer, desc, idx in transformer_pairs:
+                # Emit template_read events for variables referenced in this transformer's
+                # template fields, using the current declared_vars snapshot.
+                for field_context, template_str in transformer.template_field_strings():
+                    for var_name in extract_template_variables(template_str):
+                        if var_name in declared_vars:
+                            var_events.append(
+                                VariableEvent(
+                                    name=var_name,
+                                    event_type="template_read",
+                                    value=declared_vars[var_name],
+                                    source=f"transformer #{idx} ({field_context})",
+                                )
+                            )
+
                 name_in = working.name
-                result = transformer.transform(working)
+                result = transformer.transform(working, variables=declared_vars)
                 if result is None:
                     steps.append(
                         TransformStep(
@@ -180,7 +299,9 @@ class MemberPipeline:
                             transformed_name=working.name,
                             tvg_id=stream.tvg_id,
                             logo_url=stream.logo_url,
+                            captures=declared_vars,
                             steps=steps,
+                            variable_events=var_events,
                         ),
                     )
                 )
@@ -253,16 +374,24 @@ class GroupPipeline:
         group_stream_profile: "str | None" = None,
         inherited_order_streams_by: "OrderStreamsBy | None" = None,
         group_order_streams_by: "OrderStreamsBy | None" = None,
+        inherited_variables: "dict[str, ConfigVariable] | None" = None,
+        group_variables: "dict[str, ConfigVariable] | None" = None,
     ) -> None:
         self._key = key
         self._name = name
         effective_sp = group_stream_profile or inherited_stream_profile
         effective_osb = group_order_streams_by or inherited_order_streams_by
+        # Merge in precedence order: outer scope first, group-level shadows it.
+        effective_variables: dict[str, ConfigVariable] = {
+            **(inherited_variables or {}),
+            **(group_variables or {}),
+        }
         self._pipelines = [
             MemberPipeline(
                 m,
                 inherited_stream_profile=effective_sp,
                 inherited_order_streams_by=effective_osb,
+                inherited_variables=effective_variables,
             )
             for m in members
         ]
@@ -290,6 +419,8 @@ class ProfilePipeline:
                 group_stream_profile=cat.stream_profile,
                 inherited_order_streams_by=profile.order_streams_by,
                 group_order_streams_by=cat.order_streams_by,
+                inherited_variables=profile.variables,
+                group_variables=cat.variables,
             )
             for cat_key, cat in profile.groups.items()
         ]

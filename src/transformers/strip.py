@@ -1,5 +1,6 @@
 from apps.channels.models import Stream
 
+from .._jinja import render_template
 from .base import WaybillTransformerBase
 
 
@@ -11,14 +12,39 @@ class WaybillTransformerStrip(WaybillTransformerBase):
         self.prefix = prefix
         self.suffix = suffix
 
-    def transform(self, stream: Stream) -> Stream | None:
+    def transform(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "Stream | None":
+        ctx: dict[str, str] = variables if variables is not None else {}
+        prefix = (
+            render_template(
+                self.prefix, ctx, context_desc="strip transformer prefix field"
+            )
+            if self.prefix
+            else ""
+        )
+        suffix = (
+            render_template(
+                self.suffix, ctx, context_desc="strip transformer suffix field"
+            )
+            if self.suffix
+            else ""
+        )
         value = getattr(stream, self.field)
-        if self.prefix and value.startswith(self.prefix):
-            value = value[len(self.prefix) :]
-        if self.suffix and value.endswith(self.suffix):
-            value = value[: -len(self.suffix)]
+        if prefix and value.startswith(prefix):
+            value = value[len(prefix) :]
+        if suffix and value.endswith(suffix):
+            value = value[: -len(suffix)]
         setattr(stream, self.field, value)
         return stream
+
+    def template_field_strings(self) -> "list[tuple[str, str]]":
+        pairs: list[tuple[str, str]] = []
+        if self.prefix:
+            pairs.append(("strip transformer prefix field", self.prefix))
+        if self.suffix:
+            pairs.append(("strip transformer suffix field", self.suffix))
+        return pairs
 
     def _describe_self(self) -> str:
         parts: list[str] = []

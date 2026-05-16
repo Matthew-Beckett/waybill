@@ -3,154 +3,266 @@ version: v1alpha1
 metadata:
   name: multiple-profiles-example
   description: >
-    Demonstrates multiple profiles in a single manifest.
-    Profiles are independent; each can have its own groups, members, and
-    stream-profile defaults.  Common use-cases include device-type splits
-    (HD vs SD), user-tier splits, or regional variants.
+    Multiple independent profiles in a single manifest.
+
+    Each profile becomes a separate channel list in Dispatcharr.  The most
+    common homelab reason to use multiple profiles is a quality split:
+
+      hd   -- HD and FHD streams for your main TV or media centre, served
+              via Proxy for buffering.
+
+      sd   -- SD streams (plus HD fallback) for phones and tablets where
+              bandwidth is limited, served via Redirect to reduce overhead.
+
+      kids -- A dedicated children's channel list with its own set of
+              channels, independent from the main adult list.
+
+    Profiles are completely independent: groups, members, stream profiles,
+    and variables in one profile do not affect any other profile.
+
 spec:
   profiles:
 
-    hd_only:
-      name: HD Only
+    # -- HD profile -----------------------------------------------------------
+    # Best-quality streams for your main TV or media centre.
+    hd:
+      name: HD -- Main TV
       streamProfile: Proxy
+
       groups:
+
         news:
           name: News
           members:
-            - name: NBS News HD
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  values:
-                    - "DEMO| NBS NEWS HD"
-            - name: Orbit News HD
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  values:
-                    - "DEMO| ORBIT NEWS HD"
-                    - "DEMO| Orbit News HD"
 
-        sport:
-          name: Sport
-          streamProfile: Redirect
-          members:
-            - name: Arena Sports HD
-              matchers:
-                - type: regex
-                  field: name
-                  action: keep
-                  pattern: "^DEMO\\| Arena Sports.* HD$"
-            - name: Titan Sport HD
-              matchers:
-                - type: regex
-                  field: name
-                  action: keep
-                  pattern: "^DEMO\\| Titan Sport [1-4] HD$"
-
-        entertainment:
-          name: Entertainment
-          members:
-            - name: Apex TV HD
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  values:
-                    - "DEMO| Apex TV HD"
-                    - "DEMO| Apex 2 HD"
-            - name: Beacon HD
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  values:
-                    - "DEMO| Beacon HD"
-                    - "DEMO| Beacon 2 HD"
-
-    sd_fallback:
-      name: SD Fallback
-      streamProfile: Redirect
-      groups:
-        news:
-          name: News
-          members:
             - name: NBS News
               matchers:
-                - type: containsAny
-                  field: name
-                  action: keep
-                  substrings:
-                    - "NBS NEWS"
-                    - "NBS News"
-                - type: containsAny
-                  field: name
-                  action: drop
-                  substrings:
-                    - " HD"
-            - name: Orbit News
-              matchers:
-                - type: containsAny
-                  field: name
-                  action: keep
-                  substrings:
-                    - "ORBIT NEWS"
-                    - "Orbit News"
-                - type: containsAny
-                  field: name
-                  action: drop
-                  substrings:
-                    - " HD"
-
-        sport:
-          name: Sport
-          members:
-            - name: Arena Sports SD
-              matchers:
-                - type: hasPrefix
-                  field: name
-                  action: keep
-                  prefixes:
-                    - "DEMO| Arena Sports"
                 - type: regex
                   field: name
-                  action: drop
-                  pattern: ".* HD$"
+                  action: keep
+                  pattern: "^UK\\| NBS News (HD|FHD)$"
+              transformers:
+                - type: setMetadata
+                  name: "NBS News"
+                  tvgId: "nbs.news.demo"
+
+            - name: Orbit News
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| Orbit News (HD|FHD)$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Orbit News"
 
         entertainment:
           name: Entertainment
           members:
-            - name: Apex TV SD
+
+            - name: NBS One
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| NBS One (HD|FHD)$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS One"
+
+            - name: NBS Two
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| NBS Two (HD|FHD)$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS Two"
+
+            - name: VTN
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| VTN1? (HD|FHD)$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "VTN"
+
+            - name: Apex TV
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| Apex TV (HD|FHD)$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Apex TV"
+
+        sports:
+          name: Sports
+          # Sports streams are high-bitrate live content; Redirect avoids the
+          # extra buffering hop that can cause frame drops.
+          streamProfile: Redirect
+          members:
+
+            - name: Arena Sports 1
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| Arena Sports 1 (HD|FHD)$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Arena Sports 1"
+
+            - name: Arena Sports 2
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| Arena Sports 2 (HD|FHD)$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Arena Sports 2"
+
+            - name: Titan Sport 1
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| Titan Sport 1 (HD|FHD)$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Titan Sport 1"
+
+    # -- SD / mobile profile --------------------------------------------------
+    # Lower-bitrate streams for phones and tablets.
+    sd:
+      name: SD -- Mobile
+      # Redirect is low-overhead and well-suited for mobile clients.
+      streamProfile: Redirect
+
+      groups:
+
+        news:
+          name: News
+          members:
+
+            - name: NBS News
               matchers:
                 - type: hasPrefix
                   field: name
                   action: keep
                   prefixes:
-                    - "DEMO| Apex TV"
+                    - "UK| NBS News"
+                # Drop FHD/UHD copies -- too heavy for mobile.
                 - type: regex
                   field: name
                   action: drop
-                  pattern: ".* HD$"
+                  pattern: "\\b(FHD|UHD)\\b"
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS News"
 
+            - name: Orbit News
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| Orbit News"
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: "\\b(FHD|UHD)\\b"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Orbit News"
+
+        entertainment:
+          name: Entertainment
+          members:
+
+            - name: NBS One
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| NBS One"
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: "\\b(FHD|UHD)\\b"
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS One"
+
+            - name: VTN
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| VTN1? (HD|SD)$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "VTN"
+
+            - name: Apex TV
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| Apex TV"
+                - type: regex
+                  field: name
+                  action: drop
+                  pattern: "\\b(FHD|UHD)\\b"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Apex TV"
+
+    # -- Kids profile ---------------------------------------------------------
+    # A separate profile dedicated to children's content.
     kids:
       name: Kids
-      # No default stream profile -- each group sets its own.
+      streamProfile: Proxy
+
       groups:
-        childrens_nbs:
-          name: Children's NBS
-          streamProfile: Proxy
+
+        nbs_kids:
+          name: NBS Children's
           members:
+
             - name: Sprout
               matchers:
-                - type: exactMatch
+                - type: containsAny
                   field: name
                   action: keep
                   caseSensitive: false
-                  values:
-                    - "demo| sprout hd"
-                    - "demo| sprout"
+                  substrings:
+                    - "sprout"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Sprout"
+
             - name: Juniper
               matchers:
                 - type: containsAny
@@ -159,64 +271,50 @@ spec:
                   caseSensitive: false
                   substrings:
                     - "juniper"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  caseSensitive: false
+                  substrings:
+                    - "sprout"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Juniper"
 
-        cartoon_channels:
-          name: Cartoon Channels
+        indie_kids:
+          name: Other Children's
           streamProfile: Redirect
           members:
+
             - name: Pixel Network
               matchers:
                 - type: containsAny
                   field: name
                   action: keep
+                  caseSensitive: false
                   substrings:
-                    - "Pixel Network"
-                    - "Pixel Retro"
-            - name: Relay family
-              matchers:
-                - type: hasPrefix
+                    - "pixel network"
+              transformers:
+                - type: set
                   field: name
-                  action: keep
-                  prefixes:
-                    - "DEMO| Relay"
+                  value: "Pixel Network"
 
-    international:
-      name: International
-      groups:
-        french:
-          name: French Channels
-          members:
-            - name: "Lumiere 1"
+            - name: Relay
               matchers:
-                - type: exactMatch
+                - type: containsAny
                   field: name
                   action: keep
-                  values:
-                    - "FR| Lumiere 1"
-                    - "FR| Lumiere 1 HD"
-            - name: "Lumiere TV"
-              matchers:
-                - type: hasPrefix
+                  caseSensitive: false
+                  substrings:
+                    - "relay"
+                - type: containsAny
                   field: name
-                  action: keep
-                  prefixes:
-                    - "FR| Lumiere"
-
-        german:
-          name: German Channels
-          members:
-            - name: Kanal Eins
-              matchers:
-                - type: exactMatch
+                  action: drop
+                  substrings:
+                    - "Relay Jr"
+                    - "RelayToons"
+              transformers:
+                - type: set
                   field: name
-                  action: keep
-                  values:
-                    - "DE| Kanal Eins"
-                    - "DE| Kanal Eins HD"
-            - name: Zweites Kanal
-              matchers:
-                - type: hasPrefix
-                  field: name
-                  action: keep
-                  prefixes:
-                    - "DE| Zweites"
+                  value: "Relay"

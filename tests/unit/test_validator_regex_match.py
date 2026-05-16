@@ -12,12 +12,12 @@ class TestWaybillValidatorRegexMatch:
     @pytest.mark.parametrize(
         "name, expected",
         [
-            ("BBC One", True),
-            ("ITV 1", False),
+            ("NBS One", True),
+            ("VTN 1", False),
         ],
     )
     def test_match_result(self, name, expected, stream_factory) -> None:
-        v = WaybillValidatorRegexMatch(pattern=r"^BBC", action="warn", field="name")
+        v = WaybillValidatorRegexMatch(pattern=r"^NBS", action="warn", field="name")
         assert v.validate(stream_factory(name=name)) is expected
 
     def test_validates_tvg_id_field(self, stream_factory) -> None:

@@ -23,10 +23,41 @@ class WaybillMatcherRegex(WaybillMatcherBase):
         self.pattern = pattern
 
     def _describe_self(self) -> str:
-        return f'regex on "{self.field}": {self.pattern}'
+        named_groups = re.findall(r"\(\?P<(\w+)>", self.pattern)
+        captures_note = (
+            f" [captures: {', '.join(named_groups)}]" if named_groups else ""
+        )
+        return f'regex on "{self.field}": {self.pattern}{captures_note}'
 
     def match(self, stream: Stream) -> bool:
         field_value = self._get_field_value(stream)
         flags = 0 if self.case_sensitive else re.IGNORECASE
         matched = bool(re.match(self.pattern, field_value, flags))
         return not matched if self.action == "drop" else matched
+
+    def match_and_capture(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "tuple[bool, dict[str, str]]":
+        """Match the stream and return ``(matched, named_captures)``.
+
+        The regex pattern is rendered as a Jinja2 template using *variables*
+        before being compiled, allowing pattern values to reference predefined
+        pipeline variables.  Named capture groups (``(?P<name>...)``) from a
+        successful match are returned as a dict.  For a ``drop`` action, a
+        matched stream is *rejected* (returns ``False``) with no captures; an
+        unmatched stream is *accepted* (returns ``True``) with no captures.
+        """
+        variables_ctx: dict[str, str] = variables if variables is not None else {}
+        rendered_pattern = self._render_value(self.pattern, variables_ctx)
+        field_value = self._get_field_value(stream, variables=variables_ctx)
+        flags = 0 if self.case_sensitive else re.IGNORECASE
+        m = re.match(rendered_pattern, field_value, flags)
+
+        if self.action == "drop":
+            # Matched → stream is dropped; unmatched → stream is kept (no captures)
+            return (False, {}) if m else (True, {})
+
+        # keep (default)
+        if m:
+            return True, {k: v for k, v in m.groupdict().items() if v is not None}
+        return False, {}

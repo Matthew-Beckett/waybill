@@ -26,8 +26,10 @@ from src.types.config import (
     ValidatorOperator,
     ValidatorScope,
     ValidatorType,
+    ConfigVariable,
     _to_transformer,
     _to_validator,
+    _to_variable_dict,
 )
 
 
@@ -43,10 +45,10 @@ class TestToTransformer:
     @pytest.mark.parametrize(
         "raw_dict, expected_type",
         [
-            ({"type": "regex", "pattern": r"^BBC"}, TransformerType.REGEX),
+            ({"type": "regex", "pattern": r"^NBS"}, TransformerType.REGEX),
             ({"type": "strip"}, TransformerType.STRIP),
-            ({"type": "set", "value": "BBC One"}, TransformerType.SET),
-            ({"type": "setMetadata", "name": "BBC One"}, TransformerType.SET_METADATA),
+            ({"type": "set", "value": "NBS One"}, TransformerType.SET),
+            ({"type": "setMetadata", "name": "NBS One"}, TransformerType.SET_METADATA),
             (
                 {"type": "convertCardinalNumbers", "outputType": "number"},
                 TransformerType.CONVERT_CARDINAL_NUMBERS,
@@ -132,12 +134,12 @@ class TestToTransformer:
         assert result.suffix == " HD"
 
     def test_value_coerced_to_str(self) -> None:
-        result = _to_transformer({"type": "set", "value": "BBC One"})
-        assert result.value == "BBC One"
+        result = _to_transformer({"type": "set", "value": "NBS One"})
+        assert result.value == "NBS One"
 
     def test_name_coerced_to_str(self) -> None:
-        result = _to_transformer({"type": "setMetadata", "name": "BBC One"})
-        assert result.name == "BBC One"
+        result = _to_transformer({"type": "setMetadata", "name": "NBS One"})
+        assert result.name == "NBS One"
 
     # --- field default ---
 
@@ -339,8 +341,8 @@ class TestToValidator:
     # --- pattern and field ---
 
     def test_pattern_preserved(self) -> None:
-        result = _to_validator({"type": "regexMatch", "pattern": r"^BBC"})
-        assert result.pattern == "^BBC"
+        result = _to_validator({"type": "regexMatch", "pattern": r"^NBS"})
+        assert result.pattern == "^NBS"
 
     def test_pattern_absent_defaults_to_empty_string(self) -> None:
         result = _to_validator({"type": "nonEmpty"})
@@ -368,7 +370,7 @@ class TestConfigMemberToMatcher:
     # --- identity pass-through ---
 
     def test_passthrough_when_already_config_matcher(self) -> None:
-        existing = ConfigMatcher(type=MatcherType.REGEX, pattern=r"^BBC")
+        existing = ConfigMatcher(type=MatcherType.REGEX, pattern=r"^NBS")
         member = ConfigMember(name="test", matchers=[existing])
         assert member.matchers[0] is existing
 
@@ -377,10 +379,10 @@ class TestConfigMemberToMatcher:
     @pytest.mark.parametrize(
         "raw_dict, expected_type",
         [
-            ({"type": "regex", "pattern": r"^BBC"}, MatcherType.REGEX),
-            ({"type": "hasPrefix", "prefixes": ["BBC"]}, MatcherType.HAS_PREFIX),
-            ({"type": "containsAny", "substrings": ["BBC"]}, MatcherType.CONTAINS_ANY),
-            ({"type": "exactMatch", "values": ["BBC One"]}, MatcherType.EXACT_MATCH),
+            ({"type": "regex", "pattern": r"^NBS"}, MatcherType.REGEX),
+            ({"type": "hasPrefix", "prefixes": ["NBS"]}, MatcherType.HAS_PREFIX),
+            ({"type": "containsAny", "substrings": ["NBS"]}, MatcherType.CONTAINS_ANY),
+            ({"type": "exactMatch", "values": ["NBS One"]}, MatcherType.EXACT_MATCH),
         ],
     )
     def test_type_string_coercion(self, raw_dict, expected_type) -> None:
@@ -389,7 +391,7 @@ class TestConfigMemberToMatcher:
 
     def test_type_already_enum_passthrough(self) -> None:
         member = self._member_with_matcher(
-            {"type": MatcherType.HAS_PREFIX, "prefixes": ["ITV"]}
+            {"type": MatcherType.HAS_PREFIX, "prefixes": ["VTN"]}
         )
         assert member.matchers[0].type is MatcherType.HAS_PREFIX
 
@@ -438,9 +440,9 @@ class TestConfigMemberToMatcher:
 
     def test_prefixes_coerced_to_str_list(self) -> None:
         member = self._member_with_matcher(
-            {"type": "hasPrefix", "prefixes": ["BBC", "ITV"]}
+            {"type": "hasPrefix", "prefixes": ["NBS", "VTN"]}
         )
-        assert member.matchers[0].prefixes == ["BBC", "ITV"]
+        assert member.matchers[0].prefixes == ["NBS", "VTN"]
 
     def test_substrings_coerced_to_str_list(self) -> None:
         member = self._member_with_matcher(
@@ -450,12 +452,12 @@ class TestConfigMemberToMatcher:
 
     def test_values_coerced_to_str_list(self) -> None:
         member = self._member_with_matcher(
-            {"type": "exactMatch", "values": ["BBC One", "BBC Two"]}
+            {"type": "exactMatch", "values": ["NBS One", "NBS Two"]}
         )
-        assert member.matchers[0].values == ["BBC One", "BBC Two"]
+        assert member.matchers[0].values == ["NBS One", "NBS Two"]
 
     def test_prefixes_non_list_yields_empty_list(self) -> None:
-        member = self._member_with_matcher({"type": "hasPrefix", "prefixes": "BBC"})
+        member = self._member_with_matcher({"type": "hasPrefix", "prefixes": "NBS"})
         assert member.matchers[0].prefixes == []
 
     def test_substrings_non_list_yields_empty_list(self) -> None:
@@ -465,7 +467,7 @@ class TestConfigMemberToMatcher:
         assert member.matchers[0].substrings == []
 
     def test_values_non_list_yields_empty_list(self) -> None:
-        member = self._member_with_matcher({"type": "exactMatch", "values": "BBC One"})
+        member = self._member_with_matcher({"type": "exactMatch", "values": "NBS One"})
         assert member.matchers[0].values == []
 
     # --- caseSensitive bool coercion ---
@@ -507,11 +509,11 @@ class TestConfigMemberToMatcher:
     # --- pattern ---
 
     def test_pattern_preserved(self) -> None:
-        member = self._member_with_matcher({"type": "regex", "pattern": r"^BBC\s"})
-        assert member.matchers[0].pattern == r"^BBC\s"
+        member = self._member_with_matcher({"type": "regex", "pattern": r"^NBS\s"})
+        assert member.matchers[0].pattern == r"^NBS\s"
 
     def test_pattern_absent_defaults_to_empty_string(self) -> None:
-        member = self._member_with_matcher({"type": "hasPrefix", "prefixes": ["BBC"]})
+        member = self._member_with_matcher({"type": "hasPrefix", "prefixes": ["NBS"]})
         assert member.matchers[0].pattern == ""
 
 
@@ -519,7 +521,7 @@ class TestConfigMemberPostInit:
     def test_matchers_dicts_coerced_on_construction(self) -> None:
         member = ConfigMember(
             name="test",
-            matchers=[{"type": "regex", "pattern": r"^BBC"}],
+            matchers=[{"type": "regex", "pattern": r"^NBS"}],
         )
         assert len(member.matchers) == 1
         assert isinstance(member.matchers[0], ConfigMatcher)
@@ -558,8 +560,8 @@ class TestConfigMemberPostInit:
         member = ConfigMember(
             name="test",
             matchers=[
-                {"type": "regex", "pattern": r"^BBC"},
-                {"type": "hasPrefix", "prefixes": ["ITV"]},
+                {"type": "regex", "pattern": r"^NBS"},
+                {"type": "hasPrefix", "prefixes": ["VTN"]},
             ],
         )
         assert len(member.matchers) == 2
@@ -592,3 +594,69 @@ class TestConfigMatcherPostInit:
     def test_empty_transformers_list(self) -> None:
         matcher = ConfigMatcher(type=MatcherType.REGEX, pattern=r".*")
         assert matcher.transformers == []
+
+
+class TestToVariableDict:
+    def test_passthrough_config_variable_instance(self) -> None:
+        var = ConfigVariable(value="Arena", mutable=False)
+        result = _to_variable_dict({"brand": var})
+        assert result["brand"] is var
+
+    def test_dict_with_value_and_mutable(self) -> None:
+        result = _to_variable_dict({"brand": {"value": "Arena", "mutable": False}})
+        assert result["brand"].value == "Arena"
+        assert result["brand"].mutable is False
+
+    def test_dict_with_value_only_defaults_mutable_true(self) -> None:
+        result = _to_variable_dict({"suffix": {"value": " HD"}})
+        assert result["suffix"].value == " HD"
+        assert result["suffix"].mutable is True
+
+    def test_scalar_shorthand_creates_mutable_variable(self) -> None:
+        result = _to_variable_dict({"network": "NBS"})
+        assert result["network"].value == "NBS"
+        assert result["network"].mutable is True
+
+    def test_empty_dict_returns_empty(self) -> None:
+        result = _to_variable_dict({})
+        assert result == {}
+
+    def test_non_dict_input_returns_empty(self) -> None:
+        assert _to_variable_dict(None) == {}  # type: ignore[arg-type]
+        assert _to_variable_dict("string") == {}  # type: ignore[arg-type]
+        assert _to_variable_dict(42) == {}  # type: ignore[arg-type]
+
+    def test_multiple_variables(self) -> None:
+        result = _to_variable_dict(
+            {"brand": "Arena", "quality": {"value": "HD", "mutable": False}}
+        )
+        assert result["brand"].value == "Arena"
+        assert result["brand"].mutable is True
+        assert result["quality"].value == "HD"
+        assert result["quality"].mutable is False
+
+
+class TestConfigMemberVariablesCoercion:
+    def test_scalar_variables_coerced(self) -> None:
+        member = ConfigMember(
+            name="test",
+            variables={"brand": "Arena"},
+        )
+        assert isinstance(member.variables["brand"], ConfigVariable)
+        assert member.variables["brand"].value == "Arena"
+
+    def test_dict_variables_coerced(self) -> None:
+        member = ConfigMember(
+            name="test",
+            variables={"network": {"value": "NBS", "mutable": False}},
+        )
+        assert member.variables["network"].mutable is False
+
+    def test_existing_config_variable_passthrough(self) -> None:
+        var = ConfigVariable(value="Arena", mutable=True)
+        member = ConfigMember(name="test", variables={"brand": var})
+        assert member.variables["brand"] is var
+
+    def test_empty_variables_default(self) -> None:
+        member = ConfigMember(name="test")
+        assert member.variables == {}

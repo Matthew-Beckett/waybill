@@ -1,74 +1,107 @@
 kind: WaybillConfig
 version: v1alpha1
 metadata:
-  name: exhaustive-example
+  name: my-iptv-config
   description: >
-    Single manifest that exercises every schema feature:
-    all four matcher types, all four transformer types, pre-transformers inside
-    matchers, keep and drop actions, caseSensitive control, field targeting
-    beyond "name", stream profiles at profile / group / member level,
-    orderStreamsBy at profile / group / member level, multiple profiles,
-    multiple groups, null stream profile and null orderStreamsBy, and
-    multi-step transformation pipelines.
+    A complete, real-world-style UK IPTV configuration demonstrating every
+    Waybill feature in one manifest.
+
+    Use this as a starting point.  The stream names here follow the common
+    IPTV pattern of a country prefix ("UK| ") and an optional quality
+    suffix (" HD", " FHD").  Adapt the patterns to match your own provider.
+
+    Features used in this file:
+      - All four matcher types (regex, hasPrefix, containsAny, exactMatch)
+      - All six transformer types (strip, regex, set, setMetadata,
+        convertCardinalNumbers, template)
+      - Pre-transformers inside matchers
+      - keep and drop actions, caseSensitive control
+      - Matching on tvg_id (non-name field)
+      - Stream profile inheritance at profile / group / member level
+      - orderStreamsBy at profile / group / member level
+      - null streamProfile and null orderStreamsBy overrides
+      - Multiple profiles (main, kids)
+      - Variables at profile / group / member scope
+      - Named regex capture groups forwarded to transformers
+      - Template transformer with Jinja2 expressions
+      - Validators (count, regexMatch, nonEmpty) with warn and fail actions
 
 spec:
   profiles:
 
-    # Profile 1 -- Standard (HD-preferred)
-    # Default stream profile: Proxy.
-    # Default stream ordering: quality (sort by resolution/bitrate).
-    # Overridden at group level for sports, and at member level for one channel.
-    standard:
-      name: Standard
-      streamProfile: Proxy        # profile-level default
-      orderStreamsBy: quality     # profile-level default: sort by quality
+    # =========================================================================
+    # Profile: main
+    # The primary channel list for all viewers.
+    # =========================================================================
+    main:
+      name: Main
+      streamProfile: Proxy     # default for all groups in this profile
+      orderStreamsBy: quality  # sort streams HD > FHD > UHD > SD
+
+      # Profile-level variables.  Inherited by every group and member.
+      variables:
+        provider_prefix:
+          value: "UK| "
+          mutable: false    # no capture group may shadow this
+
       groups:
+
+        # -----------------------------------------------------------------
+        # Group: nbs -- NBS free-to-air channels.
+        # Inherits Proxy + quality ordering from the profile.
+        # -----------------------------------------------------------------
         nbs:
           name: NBS
-          # Inherits Proxy from the profile.
           members:
 
-            - name: NBS 1-4
-              # Uses regex + hasPrefix matchers, pre-transformers inside a matcher,
-              # and a three-step transformation pipeline.
+            - name: NBS One
+              # hasPrefix is the simplest option: match anything that starts
+              # with "UK| NBS One" to catch HD, FHD, and other variants.
+              # A secondary provider prefix is also listed.
               matchers:
-                - type: regex
-                  field: name
-                  action: keep
-                  # Broad first pass -- keep anything that looks like NBS 1-4
-                  # (handles both digit and word forms).
-                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
-
                 - type: hasPrefix
                   field: name
-                  action: drop
-                  # Exclude a specific low-quality re-stream prefix.
+                  action: keep
                   prefixes:
-                    - "DEMO-NBSI|"
+                    - "UK| NBS One"
+                    - "GBR| NBS One"    # secondary provider uses GBR prefix
+              transformers:
+                - type: setMetadata
+                  name: "NBS One"
+                  logoUrl: "https://logos.example.com/nbs-one.png"
+                  tvgId: "nbs.one.demo"
+              validators:
+                # Feed health check: if NBS One disappears, fail loudly
+                # before the plan is applied so the problem is visible.
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: fail
 
-                - type: regex
+            - name: NBS Two
+              matchers:
+                - type: hasPrefix
                   field: name
                   action: keep
-                  # Narrow pass after pre-transformer converts words to digits.
-                  pattern: "^DEMO\\| NBS [1-4](?:\\s+(?:HD|HEVC)|\\s*/.*)?$"
-                  transformers:
-                    - type: convertCardinalNumbers
-                      field: name
-                      outputType: number
+                  prefixes:
+                    - "UK| NBS Two"
+                    - "GBR| NBS Two"
               transformers:
-                - type: regex
+                - type: setMetadata
+                  name: "NBS Two"
+                  tvgId: "nbs.two.demo"
+
+            - name: NBS Four
+              matchers:
+                - type: hasPrefix
                   field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
-                - type: convertCardinalNumbers
-                  field: name
-                  outputType: number
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
-                  replacement: "$1"
+                  action: keep
+                  prefixes:
+                    - "UK| NBS Four"
+              transformers:
+                - type: setMetadata
+                  name: "NBS Four"
+                  tvgId: "nbs.four.demo"
 
             - name: NBS News
               matchers:
@@ -76,285 +109,268 @@ spec:
                   field: name
                   action: keep
                   substrings:
-                    - "NBS NEWS"
                     - "NBS News"
-                - type: containsAny
-                  field: name
-                  action: drop
-                  # Exclude NBS News SD duplicates.
-                  substrings:
-                    - "SD"
+                    - "NBS NEWS"
               transformers:
-                - type: strip
-                  field: name
-                  prefix: "DEMO| "
-                - type: set
-                  field: name
-                  value: "NBS News"
+                - type: setMetadata
+                  name: "NBS News"
+                  tvgId: "nbs.news.demo"
               validators:
-                # Alert if no streams are matched (obvious sign of a feed outage or name change).
-                - type: count
-                  operator: gt
-                  value: 0
-                  action: warn
-                # Require the final channel name to look like a proper news title.
-                - type: regexMatch
-                  field: name
-                  pattern: "^NBS News$"
-                  action: fail
-                # Every stream should carry EPG metadata.
+                # Every NBS News stream must carry a tvg_id for the EPG guide.
                 - type: nonEmpty
                   field: tvg_id
                   action: warn
 
-            - name: NBS Four
+        # -----------------------------------------------------------------
+        # Group: itv -- Handle providers that use word or digit number forms.
+        # -----------------------------------------------------------------
+        vtn:
+          name: VTN
+          members:
+
+            - name: VTN 1-4
+              # Problem: different providers name these "VTN ONE HD" (words)
+              # or "VTN1 HD" (digit, no space) or "VTN 1 HD" (digit, space).
+              # Solution: broad first-pass, then a pre-transformer normalises
+              # word forms to digits before the precise pattern is tested.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  # Broad first pass -- catch any VTN numbered stream.
+                  pattern: ".*VTN.*(ONE|TWO|THREE|FOUR|1|2|3|4).*"
+                - type: regex
+                  field: name
+                  action: keep
+                  # Precise second pass -- tested after word->digit normalisation.
+                  pattern: "^UK\\| VTN [1-4]( HD| FHD)?$"
+                  transformers:
+                    - type: convertCardinalNumbers
+                      field: name
+                      outputType: number
+              transformers:
+                - type: convertCardinalNumbers
+                  field: name
+                  outputType: number
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^UK\\| "
+                  replacement: ""
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+(HD|FHD)$"
+                  replacement: ""
+
+            - name: VTN News
               matchers:
                 - type: exactMatch
                   field: name
                   action: keep
                   caseSensitive: false
                   values:
-                    - "demo| nbs four hd"
-                    - "demo| nbs four"
-                    - "demo| nbs 4 hd"
-                    - "demo| nbs 4"
+                    - "uk| vtn news hd"
+                    - "uk| vtn news"
               transformers:
                 - type: set
                   field: name
-                  value: "NBS 4"
+                  value: "VTN News"
 
-        apex:
+        # -----------------------------------------------------------------
+        # Group: channel4 -- The Apex TV family.
+        # -----------------------------------------------------------------
+        apex_tv:
           name: Apex TV
-          # Inherits Proxy from the profile.
           members:
 
             - name: Apex TV family
+              # One member handles the whole Apex TV family.
+              # Keep by prefix, then drop +1 time-shift channels.
               matchers:
                 - type: hasPrefix
                   field: name
                   action: keep
                   prefixes:
-                    - "DEMO| Apex TV"
-                - type: hasPrefix
-                  field: name
-                  action: drop
-                  prefixes:
-                    - "DEMO| Apex Plus"    # handled in a separate member
-                - type: regex
-                  field: name
-                  action: drop
-                  pattern: ".*\\bSD\\b.*"
-              transformers:
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "\\s+HD$"
-                  replacement: ""
-
-            - name: Apex Plus
-              matchers:
+                    - "UK| Apex TV"
+                    - "UK| Apex 2"
+                    - "UK| Apex 3"
+                    - "UK| Apex Films"
                 - type: containsAny
                   field: name
-                  action: keep
-                  substrings:
-                    - "ApexPlus"
-                    - "Apex Plus"
-              transformers:
-                - type: set
-                  field: name
-                  value: "Apex Plus"
-                - type: set
-                  field: tvg_id
-                  value: "apexplus.demo"
-
-        beacon:
-          name: Beacon
-          members:
-
-            - name: Beacon family
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  caseSensitive: false
-                  # Pre-transformer strips "DEMO| " so values list stays clean.
-                  values:
-                    - "Beacon"
-                    - "Beacon HD"
-                    - "Beacon 2"
-                    - "Beacon 2 HD"
-                    - "Beacon Xtra"
-                    - "Beacon Xtra HD"
-                    - "Beacon Films"
-                    - "Beacon Films HD"
-                  transformers:
-                    - type: regex
-                      field: name
-                      action: replace
-                      pattern: "^DEMO\\| "
-                      replacement: ""
-              transformers:
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "\\s+HD$"
-                  replacement: ""
-
-        sports:
-          name: Sports
-          streamProfile: Redirect    # group-level override -- sports use Redirect
-          # Group-level orderStreamsBy explicitly cleared -- sports ordering managed externally.
-          orderStreamsBy: null
-          members:
-
-            - name: Arena Sports
-              matchers:
-                - type: hasPrefix
-                  field: name
-                  action: keep
-                  # Pre-transformer strips country prefix before prefix matching.
-                  prefixes:
-                    - "Arena Sports"
-                  transformers:
-                    - type: strip
-                      field: name
-                      prefix: "DEMO| "
-                - type: regex
-                  field: name
                   action: drop
-                  pattern: ".*\\bSD\\b.*"    # exclude SD variants
+                  substrings:
+                    - "+1"    # drop time-shifted copies
               transformers:
                 - type: strip
                   field: name
-                  prefix: "DEMO| "
+                  prefix: "UK| "
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+(HD|FHD)$"
+                  replacement: ""
+
+        # -----------------------------------------------------------------
+        # Group: sports -- High-bitrate live sport.
+        # Uses Redirect (direct to provider) and template transformer to
+        # turn one member into many uniquely-named sport channels.
+        # -----------------------------------------------------------------
+        sports:
+          name: Sports
+          streamProfile: Redirect   # override: sport streams go direct
+          orderStreamsBy: null       # disable quality ordering for sports
+          # Declare capture-group names so they are visible to transformers.
+          # The empty defaults are replaced per-stream at match time.
+          variables:
+            ch_name:
+              value: ""
+              mutable: true
+            quality:
+              value: ""
+              mutable: true
+          members:
+
+            - name: Arena Sports
+              # Named capture groups extract channel name and quality from
+              # each stream name.  A single member produces one Dispatcharr
+              # channel per matched stream:
+              #   "UK| Arena Sports 1 HD"   -->  "Arena Sports 1 (HD)"
+              #   "UK| Arena Sports 2 FHD"  -->  "Arena Sports 2 (FHD)"
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| (?P<ch_name>Arena Sports[^|]+?) (?P<quality>HD|FHD|UHD)$"
+              transformers:
+                - type: template
+                  field: name
+                  value: "{{ ch_name }} ({{ quality }})"
+                - type: template
+                  field: tvg_id
+                  value: "arena.{{ ch_name | lower | replace(' ', '.') }}.demo"
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: warn
 
             - name: Titan Sport
-              # Member-level overrides -- Titan uses a different profile and re-enables
-              # quality ordering (group cleared it).
+              # Member-level override: this provider is more stable on Proxy.
+              # Also re-enables quality ordering which the group cleared.
               streamProfile: Proxy
               orderStreamsBy: quality
               matchers:
                 - type: regex
                   field: name
                   action: keep
-                  pattern: "^DEMO\\| Titan Sport [1-4](?: HD)?$"
+                  pattern: "^UK\\| (?P<ch_name>Titan Sport [1-9][^|]*?) (?P<quality>HD|FHD)$"
               transformers:
-                - type: regex
+                - type: template
                   field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "\\s+HD$"
-                  replacement: ""
+                  value: "{{ ch_name }} ({{ quality }})"
 
             - name: Velocity Sport
-              # Matching on tvg_id rather than name.
+              # exactMatch pinned to specific known names -- no template needed
+              # because these channels don't follow a numbered pattern.
               matchers:
-                - type: regex
-                  field: tvg_id
-                  action: keep
-                  pattern: "^velocitysport[12]\\.demo$"
-              transformers:
-                - type: regex
+                - type: exactMatch
                   field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
+                  action: keep
+                  values:
+                    - "UK| Velocity Sport 1 HD"
+                    - "UK| Velocity Sport 2 HD"
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "UK| "
+                  suffix: " HD"
 
+        # -----------------------------------------------------------------
+        # Group: news -- Rolling 24-hour news.
+        # streamProfile and orderStreamsBy explicitly cleared -- news channels
+        # have no quality variants and Dispatcharr manages their profile.
+        # -----------------------------------------------------------------
         news:
           name: News
-          # Group stream profile and orderStreamsBy explicitly cleared --
-          # news channels have no default profile and no quality sorting.
           streamProfile: null
           orderStreamsBy: null
           members:
 
             - name: Orbit News
               matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  caseSensitive: false
-                  values:
-                    - "demo| orbit news hd"
-                    - "demo| orbit news"
-                    - "demo| orbitnews hd"
-              transformers:
-                - type: set
-                  field: name
-                  value: "Orbit News"
-
-            - name: Globe News
-              matchers:
                 - type: containsAny
                   field: name
                   action: keep
-                  caseSensitive: false
                   substrings:
-                    - "globe news"
+                    - "Orbit News"
+              transformers:
+                - type: setMetadata
+                  name: "Orbit News"
+                  tvgId: "orbit.news.demo"
+
+            - name: Globe News
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| Globe News"
+                    - "UK| GlobeNews"
               transformers:
                 - type: set
                   field: name
                   value: "Globe News"
 
-            - name: Meridian World
+            - name: International news (matched by tvg_id)
+              # Some providers have unstable stream names but stable tvg_ids.
+              # Match on tvg_id when names are unreliable.
               matchers:
-                - type: containsAny
-                  field: name
-                  action: keep
-                  substrings:
-                    - "Meridian World"
-                    - "Meridian-World"
-                - type: containsAny
-                  field: name
-                  action: drop
-                  substrings:
-                    - "Lite"
-                    - "Extra"
-              transformers:
-                - type: set
-                  field: name
-                  value: "Meridian World"
-                - type: set
+                - type: exactMatch
                   field: tvg_id
-                  value: "meridianworld.demo"
+                  action: keep
+                  values:
+                    - "meridian.world.en.demo"
+                    - "lumiere.tv.en.demo"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^[A-Z]+\\| "
+                  replacement: ""
 
-    # Profile 2 -- Kids
-    # No profile-level stream profile; each group defines its own.
+    # =========================================================================
+    # Profile: kids
+    # A completely separate channel list for the children's TV.
+    # Different channels, different stream profile, independent from main.
+    # =========================================================================
     kids:
       name: Kids
+      streamProfile: Proxy
+
       groups:
 
         nbs_kids:
           name: NBS Children's
-          streamProfile: Proxy
           members:
+
             - name: Sprout
               matchers:
-                - type: exactMatch
+                - type: containsAny
                   field: name
                   action: keep
                   caseSensitive: false
-                  values:
-                    - "demo| sprout hd"
-                    - "demo| sprout"
+                  substrings:
+                    - "sprout"
               transformers:
-                - type: set
-                  field: name
-                  value: "Sprout"
+                - type: setMetadata
+                  name: "Sprout"
+                  tvgId: "sprout.uk"
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: warn
 
             - name: Juniper
               matchers:
@@ -367,49 +383,47 @@ spec:
                 - type: containsAny
                   field: name
                   action: drop
+                  caseSensitive: false
                   substrings:
-                    - "SD"
+                    - "sprout"
               transformers:
-                - type: set
-                  field: name
-                  value: "Juniper"
+                - type: setMetadata
+                  name: "Juniper"
+                  tvgId: "juniper.uk"
 
-        cartoon_channels:
-          name: Cartoon Channels
+        indie_kids:
+          name: Other Children's
           streamProfile: Redirect
           members:
+
             - name: Pixel Network
               matchers:
                 - type: containsAny
                   field: name
                   action: keep
+                  caseSensitive: false
                   substrings:
-                    - "Pixel Network"
-                    - "Pixel Retro"
+                    - "pixel network"
               transformers:
-                - type: regex
+                - type: set
                   field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
+                  value: "Pixel Network"
 
-            - name: Relay family
+            - name: Relay
               matchers:
-                - type: hasPrefix
+                - type: containsAny
                   field: name
                   action: keep
-                  prefixes:
-                    - "DEMO| Relay"
-                - type: regex
+                  caseSensitive: false
+                  substrings:
+                    - "relay"
+                - type: containsAny
                   field: name
                   action: drop
-                  pattern: ".*\\bSD\\b.*"
+                  substrings:
+                    - "Relay Jr"
+                    - "RelayToons"
               transformers:
-                - type: strip
+                - type: set
                   field: name
-                  prefix: "DEMO| "
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "\\s+HD$"
-                  replacement: ""
+                  value: "Relay"

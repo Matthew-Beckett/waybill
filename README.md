@@ -9,7 +9,7 @@ Waybill reads a **WaybillConfig** manifest and produces a reconciled channel lis
 - **Plan** — preview the desired state without writing anything to the database.
 - **Apply** — write the desired state to the database, in `upsert` or `overwrite` mode.
 
-Channels are selected from Dispatcharr's stream catalogue using **matchers**, renamed / normalised using **transformers**, and then checked against **validators** to assert expected conditions. Stream profiles are assigned per channel with a three-level inheritance hierarchy.
+Channels are selected from Dispatcharr's stream catalogue using **matchers**, renamed / normalised using **transformers**, and then checked against **validators** to assert expected conditions. Stream profiles and predefined **variables** are both resolved through a three-level inheritance hierarchy: profile → group → member, with inner scopes shadowing outer ones.
 
 ## Motivation
 
@@ -94,12 +94,12 @@ All matchers share these common fields:
 - type: regex
   field: name
   action: keep
-  pattern: "^UK\\| BBC [1-9]( HD| HEVC)?$"
+  pattern: "^UK\\| NBS [1-9]( HD| HEVC)?$"
 ```
 
 | Field | Required | Description |
 |---|---|---|
-| `pattern` | yes | Python regular expression |
+| `pattern` | yes | Python regular expression; named capture groups (`(?P<name>...)`) are extracted into the variable scope |
 
 ### `hasPrefix`
 
@@ -108,8 +108,8 @@ All matchers share these common fields:
   field: name
   action: keep
   prefixes:
-    - "UK| BBC ONE"
-    - "UK| BBC One"
+    - "UK| NBS ONE"
+    - "UK| NBS One"
 ```
 
 | Field | Required | Description |
@@ -123,7 +123,7 @@ All matchers share these common fields:
   field: name
   action: keep
   substrings:
-    - "TALK TV"
+    - "Globe Talk"
 ```
 
 | Field | Required | Description |
@@ -137,8 +137,8 @@ All matchers share these common fields:
   field: name
   action: keep
   values:
-    - "UK| BBC ONE HD"
-    - "UK| BBC ONE HEVC"
+    - "UK| NBS ONE HD"
+    - "UK| NBS ONE HEVC"
 ```
 
 | Field | Required | Description |
@@ -153,7 +153,7 @@ Any matcher can carry a `transformers` list. These **pre-transformers** mutate t
 - type: regex
   field: name
   action: keep
-  pattern: "^UK\\| BBC [1-4]( HD| HEVC)?$"
+  pattern: "^UK\\| NBS [1-4]( HD| HEVC)?$"
   transformers:
     - type: convertCardinalNumbers
       field: name
@@ -173,6 +173,7 @@ Transformers rewrite stream fields after matching. They are applied in declarati
 | `setMetadata` | Set explicit metadata fields (`name`, `logoUrl`, `tvgId`) in one step |
 | `set` | Overwrite an arbitrary field with a literal value (low-level escape hatch) |
 | `convertCardinalNumbers` | Convert between word and digit forms of cardinal numbers |
+| `template` | Render a Jinja2 template string using named capture groups and predefined variables |
 
 Transformers that target a single stream field (`regex`, `strip`, `set`, `convertCardinalNumbers`) share:
 
@@ -215,7 +216,7 @@ Transformers that target a single stream field (`regex`, `strip`, `set`, `conver
 ```yaml
 - type: set
   field: name
-  value: "BBC One"
+  value: "NBS One"
 ```
 
 | Field | Required | Description |
@@ -231,7 +232,7 @@ Sets one or more explicit metadata fields in a single transformer.
 
 ```yaml
 - type: setMetadata
-  name: "BBC One"
+  name: "NBS One"
   logoUrl: "https://example.com/logos/bbc-one.png"
   tvgId: "bbc.one.uk"
 ```
@@ -257,6 +258,97 @@ Converts between digit and word forms of cardinal numbers (e.g. `ONE ↔ 1`).
 | Field | Values | Description |
 |---|---|---|
 | `outputType` | `number`, `word` | Target form to normalise to |
+
+### `template`
+
+Renders a [Jinja2](https://jinja.palletsprojects.com/) template string against the current variable scope.
+Variables come from two sources: **named capture groups** extracted by preceding regex matchers, and
+**predefined variables** declared in the manifest.  All standard Jinja2 filters are available.
+
+```yaml
+- type: template
+  field: name
+  value: "{{ ch_name }} ({{ quality }})"
+```
+
+| Field | Default | Description |
+|---|---|---|
+| `value` | — | Jinja2 template string |
+| `field` | `name` | Stream attribute to write the rendered output to |
+
+Referencing an undefined variable is a hard error (analogous to `set -u` in shell).
+
+---
+
+## Variables
+
+Variables provide a way to pass reusable values into template transformers.  They follow lexical
+scope through the manifest hierarchy — profile → group → member — with inner scope definitions
+shadowing outer ones.  Named capture groups from regex matchers extend the scope further at
+match time, so a single member can produce many distinct channels from one template.
+
+### Declaring variables
+
+`variables` may be declared on any `profile`, `group`, or `member` block:
+
+```yaml
+spec:
+  profiles:
+    sports:
+      variables:
+        brand:
+          value: "Arena"
+          mutable: false   # no capture group may shadow this
+      groups:
+        uk_sports:
+          variables:
+            quality_suffix:
+              value: " (Live)"   # shadows any profile-level quality_suffix
+          members:
+            - name: Sports Factory
+              variables:
+                network: "UK"   # shorthand — equivalent to {value: "UK", mutable: true}
+```
+
+Each variable has two properties:
+
+| Property | Default | Description |
+|---|---|---|
+| `value` | — | The string value of the variable (required) |
+| `mutable` | `true` | When `false`, a named capture group with the same name raises an error |
+
+A scalar shorthand (e.g. `network: "UK"`) is equivalent to `{value: "UK", mutable: true}`.
+
+### Scope resolution
+
+Variables are resolved at match time in the following precedence order (highest last wins):
+
+1. Profile-level `variables`
+2. Group-level `variables` (shadows profile)
+3. Member-level `variables` (shadows group)
+4. Named capture groups from regex matchers (shadows predefined variables, subject to mutability)
+
+### Named capture groups
+
+A `regex` matcher may include named capture groups (`(?P<name>...)`).  On a successful match,
+each captured value is added to the variable scope for that stream and passed to all
+transformers, enabling a single member to produce many uniquely-named channels:
+
+```yaml
+- name: UK Sports
+  matchers:
+    - type: regex
+      field: name
+      pattern: "^UK\\| (?P<ch_name>.+?) (?P<quality>HD|SD)$"
+  transformers:
+    - type: template
+      field: name
+      value: "{{ ch_name }} ({{ quality }})"
+```
+
+A stream named `UK| Northgate HD` would produce a channel named `Northgate (HD)`.
+
+Captures are also recorded on each `StreamRecord` in the plan output for traceability.
 
 ---
 
@@ -323,7 +415,7 @@ Asserts that a field matches a regular expression after transformation. The defa
 - type: regexMatch
   scope: channel
   field: name
-  pattern: "^BBC [1-9]"
+  pattern: "^NBS [1-9]"
   action: fail
 ```
 
@@ -376,6 +468,7 @@ The `examples/` directory contains annotated manifests covering every feature:
 | [06-multiple-profiles.yaml](examples/06-multiple-profiles.yaml) | Multiple independent profiles in one manifest |
 | [07-exhaustive.yaml](examples/07-exhaustive.yaml) | Every schema feature in one manifest |
 | [08-validators.yaml](examples/08-validators.yaml) | All three validator types with both action levels and combined validator suites |
+| [09-template-transformer.yaml](examples/09-template-transformer.yaml) | Named capture groups, template transformer, and scoped variables at profile/group/member level |
 
 ---
 

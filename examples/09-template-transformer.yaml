@@ -1,0 +1,169 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: template-transformer-example
+  description: >
+    Demonstrates how named capture groups in regex matchers combine with the
+    template transformer and scoped predefined variables.
+
+    THE PROBLEM WITHOUT TEMPLATES:
+    Your sports IPTV provider delivers dozens of streams like:
+      "UK-SPORT| Northgate HD"
+      "UK-SPORT| Northgate SD"
+      "UK-SPORT| Riverside HD"
+      "UK-SPORT| Central City HD"
+      ... (one per team per quality)
+
+    Without template support you would need a separate member block for
+    every single team.  With named capture groups + template, ONE member
+    handles all of them.
+
+    HOW IT WORKS:
+      1. A regex matcher with named groups captures the channel name and
+         quality from the stream name.
+         Pattern: "^UK-SPORT\\| (?P<ch_name>.+?) (?P<quality>HD|SD|UHD)$"
+
+      2. The captured values are added to the variable scope for that stream.
+
+      3. A template transformer renders the final channel name using those
+         values:  "{{ ch_name }} ({{ quality }})"
+
+      Result: "UK-SPORT| Northgate HD"  -->  "Northgate (HD)"
+              "UK-SPORT| Riverside SD"  -->  "Riverside (SD)"
+
+    VARIABLE SCOPE:
+    Variables follow the manifest hierarchy: profile -> group -> member.
+    Inner scopes shadow outer ones.  Predefined variables must be declared
+    as mutable: true (the default) if a capture group should be allowed to
+    override them.  Setting mutable: false makes them read-only.
+
+    CAPTURE VISIBILITY:
+    For a capture group to be forwarded to main (post-match) transformers,
+    its name must be declared in a variables block at profile, group, or
+    member scope.  Undeclared capture groups are visible only to
+    pre-transformers inside the matcher that captured them.
+
+spec:
+  profiles:
+
+    # Variables at profile scope are inherited by all groups and members.
+    sports:
+      name: Sports
+      streamProfile: Proxy
+
+      variables:
+        # Immutable: no capture group may overwrite this.  The brand prefix
+        # is always the provider name regardless of what the stream says.
+        brand:
+          value: "ArenaTV"
+          mutable: false
+
+      groups:
+
+        # -----------------------------------------------------------------
+        # Group: uk_sports
+        # Main UK sports streams.  Variables declared at group scope so that
+        # ch_name and quality captures are forwarded to transformers.
+        # -----------------------------------------------------------------
+        uk_sports:
+          name: UK Sports
+          variables:
+            # quality_suffix can be overridden per-member if needed.
+            quality_suffix:
+              value: " (Live)"
+              mutable: true
+            # Declare ch_name and quality so regex captures reach transformers.
+            ch_name:
+              value: ""
+              mutable: true
+            quality:
+              value: ""
+              mutable: true
+          members:
+
+            - name: Sports Factory
+              # ONE member entry handles every "UK-SPORT| <Team> <Quality>"
+              # stream in your provider's feed.
+              #
+              # Stream "UK-SPORT| Northgate HD"        -> channel "Northgate (HD)"
+              # Stream "UK-SPORT| Riverside SD"        -> channel "Riverside (SD)"
+              # Stream "UK-SPORT| Central City UHD"      -> channel "Central City (UHD)"
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK-SPORT\\| (?P<ch_name>.+?) (?P<quality>HD|SD|UHD)$"
+
+              transformers:
+                # Build the channel name from captured values.
+                - type: template
+                  field: name
+                  value: "{{ ch_name }} ({{ quality }})"
+
+                # Build a deterministic tvg_id from the channel name.
+                # The Jinja2 "lower" and "replace" filters normalise the value.
+                # "Northgate"  ->  tvg_id "uk-sport.arsenal"
+                - type: template
+                  field: tvg_id
+                  value: "uk-sport.{{ ch_name | lower | replace(' ', '-') }}"
+
+            - name: Regional Sports
+              # Member-level variable shadows the group-level quality_suffix.
+              variables:
+                quality_suffix:
+                  value: " [Regional]"
+                  mutable: true
+
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK-REGIONAL\\| (?P<ch_name>.+?) (?P<quality>HD|SD)$"
+                  # Pre-transformer strips leading whitespace before the regex
+                  # is tested.  Does not affect the stored stream name.
+                  transformers:
+                    - type: strip
+                      field: name
+                      prefix: "  "
+
+              transformers:
+                # quality_suffix comes from the member-level variable above.
+                - type: template
+                  field: name
+                  value: "{{ ch_name }}{{ quality_suffix }}"
+                - type: template
+                  field: tvg_id
+                  value: "uk-regional.{{ ch_name | lower | replace(' ', '-') }}"
+
+        # -----------------------------------------------------------------
+        # Group: premium_sports
+        # Premium tier channels.  brand from the profile (immutable) is used
+        # as a prefix in the channel name.
+        # -----------------------------------------------------------------
+        premium_sports:
+          name: Premium Sports
+          variables:
+            # Declare ch_name so the regex capture reaches transformers.
+            ch_name:
+              value: ""
+              mutable: true
+          members:
+
+            - name: Premium Channels
+              # brand is immutable at profile scope so no capture group can
+              # change it.  It is always prepended to the channel name.
+              # "PREMIUM| Champions League" --> "ArenaTV: Champions League"
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^PREMIUM\\| (?P<ch_name>.+)$"
+
+              transformers:
+                # brand comes from the profile-level predefined variable.
+                - type: template
+                  field: name
+                  value: "{{ brand }}: {{ ch_name }}"
+                - type: template
+                  field: tvg_id
+                  value: "premium.{{ ch_name | lower | replace(' ', '-') }}"

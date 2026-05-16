@@ -13,6 +13,7 @@ from src.transformers.regex import WaybillTransformerRegex
 from src.transformers.set import WaybillTransformerSet
 from src.transformers.set_metadata import WaybillTransformerSetMetadata
 from src.transformers.strip import WaybillTransformerStrip
+from src.transformers.template import WaybillTransformerTemplate
 from src.types.config import (
     CardinalOutputType,
     ConfigTransformer,
@@ -32,11 +33,11 @@ class TestBuildTransformer:
         assert isinstance(build_transformer(cfg), WaybillTransformerStrip)
 
     def test_builds_set_transformer(self) -> None:
-        cfg = ConfigTransformer(type=TransformerType.SET, value="BBC One")
+        cfg = ConfigTransformer(type=TransformerType.SET, value="NBS One")
         assert isinstance(build_transformer(cfg), WaybillTransformerSet)
 
     def test_builds_set_metadata_transformer(self) -> None:
-        cfg = ConfigTransformer(type=TransformerType.SET_METADATA, name="BBC One")
+        cfg = ConfigTransformer(type=TransformerType.SET_METADATA, name="NBS One")
         assert isinstance(build_transformer(cfg), WaybillTransformerSetMetadata)
 
     def test_builds_convert_cardinal_numbers_transformer(self) -> None:
@@ -67,10 +68,10 @@ class TestBuildTransformer:
         assert t.suffix == " HD"
 
     def test_set_propagates_value(self) -> None:
-        cfg = ConfigTransformer(type=TransformerType.SET, value="BBC One")
+        cfg = ConfigTransformer(type=TransformerType.SET, value="NBS One")
         t = build_transformer(cfg)
         assert isinstance(t, WaybillTransformerSet)
-        assert t.value == "BBC One"
+        assert t.value == "NBS One"
 
     def test_convert_cardinal_numbers_enum_output_type(self) -> None:
         cfg = ConfigTransformer(
@@ -95,3 +96,20 @@ class TestBuildTransformer:
         cfg.type = "totally_unknown"
         with pytest.raises((ValueError, AttributeError)):
             build_transformer(cfg)
+
+    def test_builds_template_transformer(self) -> None:
+        cfg = ConfigTransformer(
+            type=TransformerType.TEMPLATE, value="{{ ch_name }} ({{ quality }})"
+        )
+        assert isinstance(build_transformer(cfg), WaybillTransformerTemplate)
+
+    def test_template_propagates_value_and_field(self) -> None:
+        cfg = ConfigTransformer(
+            type=TransformerType.TEMPLATE,
+            value="{{ ch_name }} ({{ quality }})",
+            field="tvg_id",
+        )
+        t = build_transformer(cfg)
+        assert isinstance(t, WaybillTransformerTemplate)
+        assert t._raw_value == "{{ ch_name }} ({{ quality }})"
+        assert t.field == "tvg_id"

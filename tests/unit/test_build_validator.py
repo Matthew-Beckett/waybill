@@ -67,19 +67,19 @@ class TestBuildValidator:
                 ValidatorType.REGEX_MATCH,
                 None,
                 WaybillValidatorRegexMatch,
-                {"pattern": r"^BBC"},
+                {"pattern": r"^NBS"},
             ),
             (
                 ValidatorType.REGEX_MATCH,
                 ValidatorScope.STREAM,
                 WaybillValidatorRegexMatch,
-                {"pattern": r"^BBC"},
+                {"pattern": r"^NBS"},
             ),
             (
                 ValidatorType.REGEX_MATCH,
                 ValidatorScope.CHANNEL,
                 WaybillValidatorRegexMatchChannel,
-                {"pattern": r"^BBC"},
+                {"pattern": r"^NBS"},
             ),
             (ValidatorType.COUNT, None, WaybillValidatorCountMember, {"value": 1}),
             (

@@ -3,94 +3,149 @@ version: v1alpha1
 metadata:
   name: stream-profiles-example
   description: >
-    Demonstrates stream profile inheritance.
-    Precedence (highest -> lowest): member -> group -> profile.
-    A null value explicitly clears the inherited profile at that level.
+    Demonstrates stream profile inheritance: profile → group → member.
+
+    Dispatcharr supports different stream profiles that control how streams
+    are delivered to your devices.  A typical homelab setup has:
+
+      Proxy    — Dispatcharr fetches and re-serves the stream through its own
+                 buffer.  Adds resilience and caching; best for reliable,
+                 always-on channels such as news and general entertainment.
+
+      Redirect — Dispatcharr redirects your client straight to the provider
+                 URL.  Zero buffering overhead; best for high-bitrate live
+                 sport where an extra hop causes dropped frames.
+
+    The resolved profile comes from the most specific scope that sets it:
+
+      member → group → profile → (none)
+
+    Setting streamProfile: null at any level explicitly clears the inherited
+    value so Dispatcharr falls back to its own built-in default.
+
 spec:
   profiles:
-    default:
-      name: Default
-      # Profile-level default: every channel uses Proxy unless overridden.
+    main:
+      name: Main
+      # Profile-wide default: all channels use Proxy unless a group or
+      # member overrides it.
       streamProfile: Proxy
+
       groups:
 
-        free_to_air:
-          name: Free to Air
-          # No streamProfile here -- inherits Proxy from the profile.
+        entertainment:
+          name: Entertainment
+          # No streamProfile here — inherits Proxy from the profile.
           members:
-            - name: NBS One
-              # No streamProfile here -- inherits Proxy from the profile.
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  values:
-                    - "DEMO| NBS ONE HD"
-                    - "DEMO| NBS One HD"
 
-            - name: Beacon
-              # No streamProfile here -- inherits Proxy from the profile.
+            - name: NBS One
+              # Inherits Proxy from the profile.
               matchers:
-                - type: exactMatch
+                - type: hasPrefix
                   field: name
                   action: keep
-                  values:
-                    - "DEMO| Beacon HD"
+                  prefixes:
+                    - "UK| NBS One"
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "UK| "
+                  suffix: " HD"
+
+            - name: VTN
+              # Inherits Proxy from the profile.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| VTN1? HD$"
+              transformers:
+                - type: set
+                  field: name
+                  value: "VTN"
 
         sports:
           name: Sports
-          # Group-level override: all sport channels use Redirect instead of Proxy.
+          # Group-level override: sports are high-bitrate live events.
+          # Redirect connects the client directly to the provider so there
+          # is no extra buffering hop that can cause frame drops.
           streamProfile: Redirect
-          members:
-            - name: Arena Sports Premier
-              # No streamProfile here -- inherits Redirect from the group.
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  values:
-                    - "DEMO| Arena Sports Premier HD"
 
-            - name: Titan Sport 1
-              # Member-level override: this one channel reverts to Proxy.
-              streamProfile: Proxy
+          members:
+
+            - name: Arena Sports 1
+              # Inherits Redirect from the group.
               matchers:
-                - type: exactMatch
+                - type: hasPrefix
                   field: name
                   action: keep
-                  values:
-                    - "DEMO| Titan Sport 1 HD"
+                  prefixes:
+                    - "UK| Arena Sports 1"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Arena Sports 1"
 
             - name: Arena Sports 2
-              # Member-level override with a third profile value.
-              streamProfile: Direct
+              # Inherits Redirect from the group.
               matchers:
                 - type: hasPrefix
                   field: name
                   action: keep
                   prefixes:
-                    - "DEMO| Arena Sports 2"
+                    - "UK| Arena Sports 2"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Arena Sports 2"
 
-        premium:
-          name: Premium
-          # null explicitly removes the stream profile for this group's channels,
-          # regardless of what the profile-level default is.
+            - name: Titan Sport 1
+              # Member-level override: this provider's Titan Sport stream is
+              # more stable when served through Proxy.  Member wins over group.
+              streamProfile: Proxy
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| Titan Sport 1"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Titan Sport 1"
+
+        news:
+          name: News
+          # null clears the inherited Proxy value.  Dispatcharr will use its
+          # own built-in default for these channels rather than Proxy.
           streamProfile: null
+
           members:
-            - name: Crestwood Cinema
+
+            - name: NBS News
+              # Inherits null (no profile) from the group.
               matchers:
-                - type: hasPrefix
+                - type: containsAny
                   field: name
                   action: keep
-                  prefixes:
-                    - "DEMO| Crestwood Cinema"
+                  substrings:
+                    - "NBS News"
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS News"
 
-            - name: Crestwood Drama
-              # Member-level value takes priority even when group is null.
+            - name: Orbit News
+              # Member-level override: even though the group is null, this
+              # channel specifically needs Redirect for lower latency.
               streamProfile: Redirect
               matchers:
-                - type: exactMatch
+                - type: containsAny
                   field: name
                   action: keep
-                  values:
-                    - "DEMO| Crestwood Drama HD"
+                  substrings:
+                    - "Orbit News"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Orbit News"

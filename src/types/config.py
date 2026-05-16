@@ -39,6 +39,10 @@ def _empty_str_profile_dict() -> dict[str, "ConfigProfile"]:
     return {}
 
 
+def _empty_variable_dict() -> dict[str, "ConfigVariable"]:
+    return {}
+
+
 class MatcherType(Enum):
     REGEX = "regex"
     HAS_PREFIX = "hasPrefix"
@@ -57,6 +61,7 @@ class TransformerType(Enum):
     STRIP = "strip"
     SET = "set"
     SET_METADATA = "setMetadata"
+    TEMPLATE = "template"
 
 
 class CardinalOutputType(Enum):
@@ -92,6 +97,33 @@ class ValidatorScope(Enum):
     STREAM = "stream"
     CHANNEL = "channel"
     MEMBER = "member"
+
+
+@dataclass(frozen=True)
+class ConfigVariable:
+    value: str
+    mutable: bool = True
+
+
+def _to_variable_dict(
+    raw: "dict[str, ConfigVariable | Mapping[str, Any]] | Any",
+) -> "dict[str, ConfigVariable]":
+    """Coerce a raw mapping (from YAML) into a dict of ConfigVariable instances."""
+    if not isinstance(raw, dict):
+        return {}
+    result: dict[str, ConfigVariable] = {}
+    for key, item in raw.items():
+        if isinstance(item, ConfigVariable):
+            result[str(key)] = item
+        elif isinstance(item, dict):
+            result[str(key)] = ConfigVariable(
+                value=str(item.get("value", "")),
+                mutable=bool(item.get("mutable", True)),
+            )
+        else:
+            # Shorthand: just a scalar value, default mutable=True
+            result[str(key)] = ConfigVariable(value=str(item), mutable=True)
+    return result
 
 
 @dataclass(frozen=True)
@@ -280,11 +312,13 @@ class ConfigMember:
     validators: list[ConfigValidator] = field(default_factory=_empty_validators)
     stream_profile: str | None = None
     order_streams_by: OrderStreamsBy | None = None
+    variables: dict[str, ConfigVariable] = field(default_factory=_empty_variable_dict)
 
     def __post_init__(self):
         self.matchers = [self._to_matcher(item) for item in self.matchers]
         self.transformers = [_to_transformer(item) for item in self.transformers]
         self.validators = [_to_validator(item) for item in self.validators]
+        self.variables = _to_variable_dict(self.variables)
 
     @staticmethod
     def _to_matcher(item: ConfigMatcher | Mapping[str, Any]) -> ConfigMatcher:
@@ -356,9 +390,11 @@ class ConfigGroup:
     members: list[ConfigMember] = field(default_factory=_empty_members)
     stream_profile: str | None = None
     order_streams_by: OrderStreamsBy | None = None
+    variables: dict[str, ConfigVariable] = field(default_factory=_empty_variable_dict)
 
     def __post_init__(self):
         self.members = [self._to_member(item) for item in self.members]
+        self.variables = _to_variable_dict(self.variables)
 
     @staticmethod
     def _to_member(item: ConfigMember | Mapping[str, Any]) -> ConfigMember:
@@ -386,6 +422,13 @@ class ConfigGroup:
             else _empty_validators()
         )
 
+        raw_variables = item.get("variables", {})
+        variables = (
+            cast(dict[str, ConfigVariable], raw_variables)
+            if isinstance(raw_variables, dict)
+            else _empty_variable_dict()
+        )
+
         return ConfigMember(
             name=str(item.get("name", "")),
             matchers=matchers,
@@ -393,6 +436,7 @@ class ConfigGroup:
             validators=validators,
             stream_profile=item.get("streamProfile") or None,
             order_streams_by=_to_order_streams_by(item.get("orderStreamsBy")),
+            variables=variables,
         )
 
 
@@ -402,11 +446,13 @@ class ConfigProfile:
     groups: dict[str, ConfigGroup] = field(default_factory=_empty_str_group_dict)
     stream_profile: str | None = None
     order_streams_by: OrderStreamsBy | None = None
+    variables: dict[str, ConfigVariable] = field(default_factory=_empty_variable_dict)
 
     def __post_init__(self):
         self.groups = {
             name: self._to_group(value) for name, value in self.groups.items()
         }
+        self.variables = _to_variable_dict(self.variables)
 
     @staticmethod
     def _to_group(item: ConfigGroup | Mapping[str, Any]) -> ConfigGroup:
@@ -420,11 +466,19 @@ class ConfigProfile:
             else _empty_members()
         )
 
+        raw_variables = item.get("variables", {})
+        variables = (
+            cast(dict[str, ConfigVariable], raw_variables)
+            if isinstance(raw_variables, dict)
+            else _empty_variable_dict()
+        )
+
         return ConfigGroup(
             name=str(item.get("name", "")),
             members=members,
             stream_profile=item.get("streamProfile") or None,
             order_streams_by=_to_order_streams_by(item.get("orderStreamsBy")),
+            variables=variables,
         )
 
 
@@ -449,11 +503,19 @@ class ConfigSpec:
             else _empty_str_group_dict()
         )
 
+        raw_variables = item.get("variables", {})
+        variables = (
+            cast(dict[str, ConfigVariable], raw_variables)
+            if isinstance(raw_variables, dict)
+            else _empty_variable_dict()
+        )
+
         return ConfigProfile(
             name=str(item.get("name", "")),
             groups=groups,
             stream_profile=item.get("streamProfile") or None,
             order_streams_by=_to_order_streams_by(item.get("orderStreamsBy")),
+            variables=variables,
         )
 
 

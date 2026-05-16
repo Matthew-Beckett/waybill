@@ -1,186 +1,232 @@
 kind: WaybillConfig
 version: v1alpha1
 metadata:
-  name: matchers-example
+  name: matchers-reference
   description: >
-    Demonstrates all four matcher types (regex, hasPrefix, containsAny, exactMatch)
-    with keep/drop actions, case-sensitivity control, and matching on different stream fields.
+    Reference guide for all four matcher types.
+
+    A matcher answers the question "which streams from Dispatcharr should
+    contribute to this channel?"  Choose the type that fits how your IPTV
+    provider names its streams:
+
+      regex       — use when stream names follow a predictable pattern, such
+                    as numbered channels or consistent quality suffixes.
+                    Most powerful, requires some regex knowledge.
+
+      hasPrefix   — use when all the streams you want share a common prefix
+                    such as "UK| NBS" or "UK| Arena Sports".  Plain text,
+                    no regex required.
+
+      containsAny — use when you want to catch streams from several providers
+                    that all share a keyword ("Sports", "News") regardless of
+                    their prefix.  Also plain text.
+
+      exactMatch  — use when you have looked up the exact stream names in
+                    Dispatcharr and want to pin them precisely.  Most explicit.
+
+    Multiple matchers on one member are evaluated in sequence — each one
+    filters the set from the previous step.  Combine keep and drop to first
+    cast a wide net, then trim out streams you don't want.
+
 spec:
   profiles:
-    default:
-      name: Default
+    main:
+      name: Main
+
       groups:
 
-        regex_matchers:
-          name: Regex Matchers
+        # ── regex ─────────────────────────────────────────────────────────
+        regex_examples:
+          name: Regex Matcher Examples
           members:
 
-            - name: Arena Sports (regex keep)
-              # Keeps any stream whose name matches the pattern.
+            - name: VTN 1–4 HD (regex keep — numbered family)
+              # Your provider delivers "UK| VTN1 HD", "UK| VTN2 HD", etc.
+              # The pattern anchors to the start (^) and end ($) so you don't
+              # accidentally catch "UK| VTN1 +1 HD" (the +1 time-shift channel).
               matchers:
                 - type: regex
                   field: name
                   action: keep
-                  pattern: "^DEMO\\| Arena Sports.*"
+                  pattern: "^UK\\| VTN[1-4] HD$"
 
-            - name: Arena Sports HD only (regex keep + regex drop SD)
-              # A second matcher narrows the set produced by the first.
+            - name: NBS channels — excluding NBS Three (regex keep + regex drop)
+              # Keep all NBS HD streams with the first matcher, then drop the
+              # ones you don't want with the second.  Two focused patterns are
+              # easier to maintain than one complex expression that does both.
               matchers:
                 - type: regex
                   field: name
                   action: keep
-                  pattern: "^DEMO\\| Arena Sports.*"
+                  pattern: "^UK\\| NBS .*(HD|FHD)$"
                 - type: regex
                   field: name
                   action: drop
-                  pattern: ".*\\bSD\\b.*"
+                  # NBS Three moved to streaming-only; skip it.
+                  pattern: "^UK\\| NBS Three"
 
-            - name: Arena Sports case-sensitive (regex caseSensitive)
-              # With caseSensitive: true the match is not folded to lower-case first.
-              matchers:
-                - type: regex
-                  field: name
-                  action: keep
-                  pattern: "Arena Sports Premier"
-                  caseSensitive: true
-
-            - name: Metro channels by tvg_id (regex on non-name field)
-              # field can be any stream attribute, e.g. tvg_id.
+            - name: NBS channels by tvg_id (regex on a non-name field)
+              # If stream names are unreliable but tvg_ids are consistent,
+              # match on tvg_id instead.  Any stream field works.
               matchers:
                 - type: regex
                   field: tvg_id
                   action: keep
-                  pattern: ".*\\.metroBroadcast\\..*"
                   caseSensitive: false
+                  pattern: "^nbs\\.(one|two|four|news)\\.demo$"
 
-        has_prefix_matchers:
-          name: HasPrefix Matchers
+        # ── hasPrefix ─────────────────────────────────────────────────────
+        has_prefix_examples:
+          name: HasPrefix Matcher Examples
           members:
 
-            - name: Central News (hasPrefix keep — multiple prefixes)
-              # Keeps a stream if its field starts with ANY of the listed prefixes.
+            - name: All Arena Sports channels (hasPrefix keep — single prefix)
+              # Keeps any stream whose name starts with "UK| Arena Sports".
+              # Catches "UK| Arena Sports 1 HD", "UK| Arena Sports Main Event HD",
+              # "UK| Arena Sports News HD", etc. in a single matcher.
               matchers:
                 - type: hasPrefix
                   field: name
                   action: keep
                   prefixes:
-                    - "DEMO| CENTRAL NEWS"
-                    - "DEMO| Central News"
+                    - "UK| Arena Sports"
 
-            - name: Meridian TV without SD (hasPrefix keep + hasPrefix drop)
+            - name: NBS from multiple providers (hasPrefix — multiple prefixes)
+              # Your main provider uses "UK| NBS"; a backup uses "GBR| NBS".
+              # List both prefixes — a stream matching either one is kept.
               matchers:
                 - type: hasPrefix
                   field: name
                   action: keep
                   prefixes:
-                    - "DEMO| Meridian"
+                    - "UK| NBS"
+                    - "GBR| NBS"
+
+            - name: Arena Sports excluding +1 time-shifts (hasPrefix keep + hasPrefix drop)
+              # First matcher: keep everything starting with "UK| Arena Sports".
+              # Second matcher: drop the +1 time-shifted channels you don't need.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| Arena Sports"
                 - type: hasPrefix
                   field: name
                   action: drop
                   prefixes:
-                    - "DEMO| Meridian SD"
-                    - "SD-DEMO| Meridian"
+                    - "UK| Arena Sports+ "   # +1 channels all start with this
 
-            - name: Horizon TV case-insensitive prefix (hasPrefix caseSensitive false)
-              # caseSensitive: false is the default; listed here explicitly for clarity.
+            - name: NBS One — case-insensitive prefix (hasPrefix caseSensitive false)
+              # caseSensitive: false is the default; shown explicitly here for
+              # clarity.  "uk| nbs one HD" and "UK| NBS One HD" both match.
               matchers:
                 - type: hasPrefix
                   field: name
                   action: keep
                   caseSensitive: false
                   prefixes:
-                    - "demo| horizon"
+                    - "uk| nbs one"
 
-        contains_any_matchers:
-          name: ContainsAny Matchers
+        # ── containsAny ───────────────────────────────────────────────────
+        contains_any_examples:
+          name: ContainsAny Matcher Examples
           members:
 
-            - name: Factual channels (containsAny keep)
-              # Keeps a stream if its field contains ANY of the listed substrings.
+            - name: All sport channels from any provider (containsAny keep)
+              # Useful when different providers each use their own prefix, but
+              # the channel name always contains a recognisable keyword.
+              # "UK| Arena Sports 1 HD", "UK| Titan Sport 2 HD", etc. all match.
               matchers:
                 - type: containsAny
                   field: name
                   action: keep
                   substrings:
-                    - "Documentary"
-                    - "Factual"
-                    - "Nature View"
+                    - "Arena Sports"
+                    - "Titan Sport"
+                    - "Titan Extra"
+                    - "Velocity Sport"
 
-            - name: Cinema channels excluding pay-per-view (containsAny keep + containsAny drop)
+            - name: News channels — excluding entertainment (containsAny keep + drop)
+              # Cast a wide net for news channels, then drop channels that
+              # contain "News" in their name but are entertainment-adjacent
+              # (chat shows, magazine programmes, etc.).
               matchers:
                 - type: containsAny
                   field: name
                   action: keep
                   substrings:
-                    - "Film"
-                    - "Cinema"
-                    - "Movies"
+                    - "NBS News"
+                    - "Orbit News"
+                    - "VTN News"
+                    - "Apex News"
                 - type: containsAny
                   field: name
                   action: drop
                   substrings:
-                    - "PPV"
-                    - "Pay Per View"
-                    - "On Demand"
+                    - "Extra"
+                    - "+1"
 
-            - name: Alpha channels (containsAny caseSensitive true)
+            - name: Apex TV family (containsAny caseSensitive true)
+              # caseSensitive: true means substring matching is exact-case.
+              # Use this when the keyword is reliably capitalised in your feed.
               matchers:
                 - type: containsAny
                   field: name
                   action: keep
                   caseSensitive: true
                   substrings:
-                    - "Alpha One"
-                    - "Alpha Two"
-                    - "Alpha Xtra"
+                    - "Apex TV"
+                    - "Apex 2"
+                    - "Apex 3"
+                    - "Apex Films"
 
-        exact_match_matchers:
-          name: ExactMatch Matchers
+        # ── exactMatch ────────────────────────────────────────────────────
+        exact_match_examples:
+          name: ExactMatch Matcher Examples
           members:
 
-            - name: Apex TV family (exactMatch keep — multiple values)
-              # Keeps a stream only if its field equals one of the listed values exactly.
+            - name: NBS One — all known stream names (exactMatch keep)
+              # If you have checked your Dispatcharr stream library and know the
+              # exact names your provider uses, list them here.  Nothing outside
+              # this list will ever be matched, which prevents accidental
+              # captures if a provider adds new streams with similar names.
               matchers:
                 - type: exactMatch
                   field: name
                   action: keep
                   values:
-                    - "DEMO| Apex TV"
-                    - "DEMO| Apex TV HD"
-                    - "DEMO| Apex 2"
-                    - "DEMO| Apex 3"
-                    - "DEMO| Apex 4"
+                    - "UK| NBS One HD"
+                    - "UK| NBS One FHD"
+                    - "UK| NBS 1 HD"
+                    - "UK| NBS1 HD"
 
-            - name: Apex TV HD only excluding SD (exactMatch keep + exactMatch drop)
+            - name: Orbit News — HD only (exactMatch keep + exactMatch drop)
+              # Keep the HD and FHD copies, then explicitly drop the SD one
+              # in case a provider adds it to the feed later.
               matchers:
                 - type: exactMatch
                   field: name
                   action: keep
                   values:
-                    - "DEMO| Apex TV"
-                    - "DEMO| Apex TV HD"
+                    - "UK| Orbit News HD"
+                    - "UK| Orbit News FHD"
+                    - "UK| Orbit News"
                 - type: exactMatch
                   field: name
                   action: drop
                   values:
-                    - "DEMO| Apex TV SD"
+                    - "UK| Orbit News SD"   # drop the SD copy explicitly
 
-            - name: Beacon TV case-insensitive exact (exactMatch caseSensitive false)
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  caseSensitive: false
-                  values:
-                    - "demo| beacon tv"
-                    - "demo| beacon tv hd"
-
-            - name: Channels matched by tvg_id exact value
+            - name: Apex TV family — pinned by tvg_id (exactMatch on tvg_id)
+              # Matching on tvg_id is a good fallback when a provider keeps
+              # renaming the stream but the EPG ID stays stable.
               matchers:
                 - type: exactMatch
                   field: tvg_id
                   action: keep
                   values:
-                    - "beacontv.demo"
-                    - "beaconplus.demo"
-                    - "beaconxtra.demo"
+                    - "apex.demo"
+                    - "apex2.demo"
+                    - "morapex2.demo"
+                    - "apexfilms.demo"

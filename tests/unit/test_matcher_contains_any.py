@@ -11,8 +11,8 @@ class TestWaybillMatcherContainsAny:
     @pytest.mark.parametrize(
         "name, expected",
         [
-            ("BBC News", True),
-            ("BBC Sport", False),
+            ("NBS News", True),
+            ("NBS Sport", False),
         ],
     )
     def test_match_result(self, name, expected, stream_factory) -> None:
@@ -21,8 +21,8 @@ class TestWaybillMatcherContainsAny:
 
     def test_matches_any_of_multiple_substrings(self, stream_factory) -> None:
         m = WaybillMatcherContainsAny(substrings=["News", "Sport"], field="name")
-        assert m.match(stream_factory(name="BBC Sport")) is True
-        assert m.match(stream_factory(name="BBC One")) is False
+        assert m.match(stream_factory(name="NBS Sport")) is True
+        assert m.match(stream_factory(name="NBS One")) is False
 
     @pytest.mark.parametrize(
         "substrings, case_sensitive, expected",
@@ -38,12 +38,12 @@ class TestWaybillMatcherContainsAny:
         m = WaybillMatcherContainsAny(
             substrings=substrings, field="name", case_sensitive=case_sensitive
         )
-        assert m.match(stream_factory(name="BBC News")) is expected
+        assert m.match(stream_factory(name="NBS News")) is expected
 
     def test_drop_action_inverts_result(self, stream_factory) -> None:
         m = WaybillMatcherContainsAny(substrings=["News"], field="name", action="drop")
-        assert m.match(stream_factory(name="BBC News")) is False
-        assert m.match(stream_factory(name="BBC One")) is True
+        assert m.match(stream_factory(name="NBS News")) is False
+        assert m.match(stream_factory(name="NBS One")) is True
 
     def test_matches_on_tvg_id_field(self, stream_factory) -> None:
         m = WaybillMatcherContainsAny(substrings=["demo"], field="tvg_id")
@@ -52,13 +52,13 @@ class TestWaybillMatcherContainsAny:
 
     def test_empty_substrings_matches_nothing(self, stream_factory) -> None:
         m = WaybillMatcherContainsAny(substrings=[], field="name")
-        assert m.match(stream_factory(name="BBC News")) is False
+        assert m.match(stream_factory(name="NBS News")) is False
 
     @pytest.mark.parametrize(
         "name, substring",
         [
-            ("BBC One", "BBC"),  # substring at start
-            ("BBC One HD", "HD"),  # substring at end
+            ("NBS One", "NBS"),  # substring at start
+            ("NBS One HD", "HD"),  # substring at end
         ],
     )
     def test_substring_position(self, name, substring, stream_factory) -> None:
@@ -77,3 +77,22 @@ class TestWaybillMatcherContainsAny:
             substrings=["news"], field="name", case_sensitive=True
         )
         assert "case-sensitive" in m.describe()
+
+    def test_renders_template_in_substring(self, stream_factory) -> None:
+        """Template expressions in substring values are rendered using variables scope."""
+        m = WaybillMatcherContainsAny(substrings=["{{ keyword }}"], field="name")
+        matched, _ = m.match_and_capture(
+            stream_factory(name="NBS News"),
+            variables={"keyword": "News"},
+        )
+        assert matched is True
+
+    def test_template_substring_no_match_when_variable_differs(
+        self, stream_factory
+    ) -> None:
+        m = WaybillMatcherContainsAny(substrings=["{{ keyword }}"], field="name")
+        matched, _ = m.match_and_capture(
+            stream_factory(name="NBS News"),
+            variables={"keyword": "Sport"},
+        )
+        assert matched is False

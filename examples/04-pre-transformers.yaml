@@ -3,150 +3,150 @@ version: v1alpha1
 metadata:
   name: pre-transformers-example
   description: >
-    Demonstrates transformers scoped inside a matcher (pre-transformers).
-    Pre-transformers mutate the field value before the matcher evaluates it,
-    allowing canonicalisation of noisy stream names without affecting the
-    final output -- the member-level transformers handle the actual mutation.
+    Pre-transformers run inside a matcher — they temporarily modify the stream
+    field so the matcher's pattern is tested against a normalised value.
+    The original field is NOT changed; only the main transformers (outside the
+    matcher) affect the stream that is stored in Dispatcharr.
+
+    The classic homelab problem is provider inconsistency: one provider names
+    a channel "UK| VTN ONE HD" (word form) and another calls it "UK| VTN1 HD"
+    (digit form, no space).  Without pre-transformers you need three separate
+    member blocks — one per provider variant.  With a pre-transformer that
+    normalises the name first, a single member handles all providers.
+
 spec:
   profiles:
-    default:
-      name: Default
+    main:
+      name: Main
+
       groups:
 
-        channels:
-          name: Channels
+        number_normalisation:
+          name: Normalise Words vs Digits Before Matching
           members:
 
-            - name: NBS 1-4 (convert cardinal words before regex matching)
-              # Problem: streams arrive as both "NBS ONE HD" and "NBS 1 HD".
-              # The pre-transformer converts either form to digits so a single
-              # pattern can match them all.  The member-level transformers then
-              # produce the final canonical name.
+            - name: VTN 1–4 from any provider
+              # Providers seen in the wild for VTN:
+              #   "UK| VTN ONE HD"  — word form
+              #   "UK| VTN1 HD"     — digit, no space
+              #   "UK| VTN 1 HD"    — digit, with space
+              #
+              # The first matcher does a broad sweep; the second uses a
+              # pre-transformer to normalise word numbers to digits so the
+              # clean pattern "^UK\| VTN [1-4]" matches all three forms.
+              # The pre-transformer result is thrown away after matching;
+              # the main transformers below produce the stored channel name.
               matchers:
                 - type: regex
                   field: name
                   action: keep
-                  # Broad first pass -- keep anything that looks like NBS 1-4.
-                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
+                  # Broad first pass — catch any VTN-numbered stream.
+                  pattern: ".*VTN.*(ONE|TWO|THREE|FOUR|1|2|3|4).*"
 
                 - type: regex
                   field: name
                   action: keep
-                  # Narrow second pass -- after the pre-transformer converts words
-                  # to digits, this pattern can match both variants uniformly.
-                  pattern: "^DEMO\\| NBS [1-4](?:\\s+(?:HD|HEVC)|\\s*/.*)?$"
+                  # Precise second pass — tested against the pre-transformed
+                  # (word→digit normalised) name.
+                  pattern: "^UK\\| VTN [1-4]( HD| FHD)?$"
                   transformers:
                     - type: convertCardinalNumbers
                       field: name
                       outputType: number
               transformers:
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
+                # These run against the original (non-pre-transformed) name.
                 - type: convertCardinalNumbers
                   field: name
                   outputType: number
                 - type: regex
                   field: name
                   action: replace
-                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
-                  replacement: "$1"
+                  pattern: "^UK\\| "
+                  replacement: ""
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+(HD|FHD)$"
+                  replacement: ""
 
-            - name: Arena Sports (strip country prefix before prefix matching)
-              # Streams are named "DEMO| Arena Sports Premier HD".
-              # The pre-transformer strips "DEMO| " so that the hasPrefix matcher
-              # can be written without the country tag.
+            - name: NBS 1–4 from any provider
+              # Same technique for NBS:
+              #   "UK| NBS ONE HD"  → normalised → "UK| NBS 1 HD"
+              #   "UK| NBS Two HD"  → normalised → "UK| NBS 2 HD"
+              #   "UK| NBS 1 HD"    → already in digit form, passes through
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: ".*NBS.*(ONE|TWO|THREE|FOUR|1|2|3|4).*"
+
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| NBS [1-4]( HD| FHD)?$"
+                  transformers:
+                    - type: convertCardinalNumbers
+                      field: name
+                      outputType: number
+              transformers:
+                - type: convertCardinalNumbers
+                  field: name
+                  outputType: number
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^UK\\| "
+                  replacement: ""
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+(HD|FHD)$"
+                  replacement: ""
+
+        prefix_strip_before_matching:
+          name: Strip Provider Prefix Before Matching
+          members:
+
+            - name: NBS channels — exact match after pre-strip
+              # You want to use exactMatch because you know exactly which NBS
+              # channels you want and don't want to accidentally pick up others.
+              # However your provider includes the "UK| " prefix in the name,
+              # and a backup provider uses "GBR| ".
+              # Pre-transformers strip the prefix so the exactMatch values
+              # list stays short and doesn't need to enumerate every variant.
               matchers:
                 - type: hasPrefix
                   field: name
                   action: keep
                   prefixes:
-                    - "Arena Sports"
-                  transformers:
-                    - type: strip
-                      field: name
-                      prefix: "DEMO| "
-              transformers:
-                - type: strip
-                  field: name
-                  prefix: "DEMO| "
-
-            - name: Apex TV (regex strip before containsAny substring matching)
-              # The pre-transformer removes the country prefix so the substrings
-              # can target the channel name directly.
-              matchers:
-                - type: containsAny
-                  field: name
-                  action: keep
-                  substrings:
-                    - "Apex TV"
-                    - "Apex Plus"
-                  transformers:
-                    - type: regex
-                      field: name
-                      action: replace
-                      pattern: "^DEMO\\| "
-                      replacement: ""
-              transformers:
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
-
-            - name: Beacon family (regex normalise before exactMatch)
-              # exactMatch is strict; the pre-transformer strips the country tag
-              # so the values list does not need to enumerate every regional variant.
-              matchers:
+                    - "UK| NBS"
+                    - "GBR| NBS"
                 - type: exactMatch
                   field: name
                   action: keep
                   caseSensitive: false
                   values:
-                    - "Beacon"
-                    - "Beacon HD"
-                    - "Beacon 2"
-                    - "Beacon 2 HD"
-                    - "Beacon Xtra"
-                    - "Beacon Films"
+                    - "bbc one hd"
+                    - "bbc two hd"
+                    - "bbc four hd"
                   transformers:
-                    - type: regex
+                    # Strip whichever provider prefix is present before the
+                    # exactMatch pattern is evaluated.
+                    - type: strip
                       field: name
-                      action: replace
-                      pattern: "^DEMO\\| "
-                      replacement: ""
+                      prefix: "UK| "
+                    - type: strip
+                      field: name
+                      prefix: "GBR| "
               transformers:
+                - type: strip
+                  field: name
+                  prefix: "UK| "
+                - type: strip
+                  field: name
+                  prefix: "GBR| "
                 - type: regex
                   field: name
                   action: replace
-                  pattern: "^DEMO\\| "
+                  pattern: "\\s+(HD|FHD)$"
                   replacement: ""
-
-            - name: Multi-transformer pre-transform (cardinal then regex)
-              # Multiple pre-transformers run in order before the matcher evaluates.
-              matchers:
-                - type: hasPrefix
-                  field: name
-                  action: keep
-                  prefixes:
-                    - "NBS"
-                  transformers:
-                    - type: regex
-                      field: name
-                      action: replace
-                      pattern: "^DEMO\\| "
-                      replacement: ""
-                    - type: convertCardinalNumbers
-                      field: name
-                      outputType: number
-              transformers:
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
-                - type: convertCardinalNumbers
-                  field: name
-                  outputType: number

@@ -124,12 +124,12 @@ def test_member_scope_count_violates_when_no_channels_are_built() -> None:
 
 def test_channel_scope_non_empty_uses_assembled_epg_id() -> None:
     _set_streams(
-        _StreamStub(pk=1, name="BBC One", tvg_id="bbc.one"),
-        _StreamStub(pk=2, name="BBC One", tvg_id="bbc.one"),
-        _StreamStub(pk=3, name="BBC One", tvg_id=""),
+        _StreamStub(pk=1, name="NBS One", tvg_id="bbc.one"),
+        _StreamStub(pk=2, name="NBS One", tvg_id="bbc.one"),
+        _StreamStub(pk=3, name="NBS One", tvg_id=""),
     )
     member = ConfigMember(
-        name="BBC One",
+        name="NBS One",
         validators=[
             {
                 "type": "nonEmpty",
@@ -142,6 +142,6 @@ def test_channel_scope_non_empty_uses_assembled_epg_id() -> None:
 
     result = MemberPipeline(member).process()
 
-    assert [channel.name for channel in result.channels] == ["BBC One"]
+    assert [channel.name for channel in result.channels] == ["NBS One"]
     assert result.channels[0].epg_id == "bbc.one"
     assert result.violations == []
