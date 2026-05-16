@@ -22,3 +22,12 @@ class WaybillTransformerBase(ABC):
     def describe(self) -> str:
         """Return a human-readable description of this transformer."""
         return self._describe_self()
+
+    def template_field_strings(self) -> "list[tuple[str, str]]":
+        """Return ``(context_desc, template_str)`` pairs for fields rendered as Jinja2 templates.
+
+        The pipeline uses these pairs to emit ``template_read`` variable events
+        for plan logging.  The base implementation returns an empty list;
+        subclasses that render template strings must override this.
+        """
+        return []

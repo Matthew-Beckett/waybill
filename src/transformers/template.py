@@ -1,16 +1,9 @@
 from __future__ import annotations
 
-import jinja2
-
 from apps.channels.models import Stream
 
+from .._jinja import render_template
 from .base import WaybillTransformerBase
-
-
-_JINJA_ENV = jinja2.Environment(
-    undefined=jinja2.StrictUndefined,
-    autoescape=False,
-)
 
 
 class WaybillTransformerTemplate(WaybillTransformerBase):
@@ -26,15 +19,21 @@ class WaybillTransformerTemplate(WaybillTransformerBase):
     def __init__(self, value: str, field: str = "name") -> None:
         self.field = field
         self._raw_value = value
-        self._template = _JINJA_ENV.from_string(value)
 
     def transform(
         self, stream: Stream, variables: "dict[str, str] | None" = None
     ) -> "Stream | None":
         ctx: dict[str, str] = variables if variables is not None else {}
-        rendered = self._template.render(**ctx)
+        rendered = render_template(
+            self._raw_value,
+            ctx,
+            context_desc=f'template transformer "{self.field}" field',
+        )
         setattr(stream, self.field, rendered)
         return stream
+
+    def template_field_strings(self) -> "list[tuple[str, str]]":
+        return [(f'template transformer "{self.field}" field', self._raw_value)]
 
     def _describe_self(self) -> str:
         field_note = f' on "{self.field}"' if self.field != "name" else ""

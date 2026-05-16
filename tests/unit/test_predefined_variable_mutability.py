@@ -106,9 +106,13 @@ class TestMutableVariable:
     @pytest.mark.parametrize(
         "variable_spec, stream_name, template_value, expected",
         [
-            # Explicit mutable=True dict — capture replaces it
+            # Explicit mutable=True dict — capture replaces it.
+            # quality must also be declared so the regex capture reaches the template.
             (
-                {"ch_name": {"value": "Default", "mutable": True}},
+                {
+                    "ch_name": {"value": "Default", "mutable": True},
+                    "quality": {"value": "", "mutable": True},
+                },
                 "UK| Arsenal HD",
                 "{{ ch_name }} ({{ quality }})",
                 "Arsenal (HD)",
@@ -188,10 +192,14 @@ class TestImmutableVariable:
                 {
                     "type": "template",
                     "field": "name",
+                    # ch_name must be declared so the capture reaches the template.
                     "value": "{{ brand }}: {{ ch_name }}",
                 }
             ],
-            variables={"brand": {"value": "Arena", "mutable": False}},
+            variables={
+                "brand": {"value": "Arena", "mutable": False},
+                "ch_name": {"value": "", "mutable": True},
+            },
         )
         plan = MemberPipeline(member).process()
         assert plan.channels[0].name == "Arena: Arsenal"

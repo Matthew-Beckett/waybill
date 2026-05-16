@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from src.transformers.strip import WaybillTransformerStrip
 
 
@@ -78,3 +80,27 @@ class TestWaybillTransformerStrip:
     def test_describe_shows_field_when_not_name(self) -> None:
         t = WaybillTransformerStrip(suffix=".demo", field="tvg_id")
         assert "tvg_id" in t.describe()
+
+    def test_renders_template_in_prefix(self, stream_factory) -> None:
+        t = WaybillTransformerStrip(prefix="{{ provider }}| ")
+        s = stream_factory(name="UK| BBC One")
+        t.transform(s, variables={"provider": "UK"})
+        assert s.name == "BBC One"
+
+    def test_renders_template_in_suffix(self, stream_factory) -> None:
+        t = WaybillTransformerStrip(suffix=" {{ quality }}")
+        s = stream_factory(name="BBC One HD")
+        t.transform(s, variables={"quality": "HD"})
+        assert s.name == "BBC One"
+
+    def test_undefined_template_variable_in_prefix_raises(self, stream_factory) -> None:
+        t = WaybillTransformerStrip(prefix="{{ missing }}| ")
+        s = stream_factory(name="UK| BBC One")
+        with pytest.raises(ValueError, match="Undefined template variable"):
+            t.transform(s, variables={})
+
+    def test_template_field_strings_exposes_prefix_and_suffix(self) -> None:
+        t = WaybillTransformerStrip(prefix="{{ p }}", suffix="{{ s }}")
+        pairs = dict(t.template_field_strings())
+        assert "{{ p }}" in pairs.values()
+        assert "{{ s }}" in pairs.values()

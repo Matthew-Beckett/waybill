@@ -36,3 +36,25 @@ class WaybillMatcherHasPrefix(WaybillMatcherBase):
         has_prefix = any(field_value.startswith(p) for p in self._prefixes)
         # "keep" → True when condition is met; "drop" → True when condition is NOT met
         return not has_prefix if self.action == "drop" else has_prefix
+
+    def match_and_capture(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "tuple[bool, dict[str, str]]":
+        """Match the stream after rendering each prefix as a Jinja2 template.
+
+        Template expressions in prefix values are rendered using *variables*,
+        allowing prefix patterns to reference predefined pipeline variables.
+        """
+        variables_ctx: dict[str, str] = variables if variables is not None else {}
+        rendered_prefixes = [
+            self._render_value(p, variables_ctx) for p in self._display_prefixes
+        ]
+        field_value = self._get_field_value(stream, variables=variables_ctx)
+        if not self.case_sensitive:
+            field_value_cmp = field_value.lower()
+            rendered_prefixes = [p.lower() for p in rendered_prefixes]
+        else:
+            field_value_cmp = field_value
+        has_prefix = any(field_value_cmp.startswith(p) for p in rendered_prefixes)
+        matched = not has_prefix if self.action == "drop" else has_prefix
+        return matched, {}

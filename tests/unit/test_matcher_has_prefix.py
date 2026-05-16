@@ -64,3 +64,22 @@ class TestWaybillMatcherHasPrefix:
     def test_describe_indicates_case_sensitive(self) -> None:
         m = WaybillMatcherHasPrefix(prefixes=["BBC"], field="name", case_sensitive=True)
         assert "case-sensitive" in m.describe()
+
+    def test_renders_template_in_prefix(self, stream_factory) -> None:
+        """Template expressions in prefix values are rendered using variables scope."""
+        m = WaybillMatcherHasPrefix(prefixes=["{{ provider }}|"], field="name")
+        matched, _ = m.match_and_capture(
+            stream_factory(name="UK| BBC One"),
+            variables={"provider": "UK"},
+        )
+        assert matched is True
+
+    def test_template_prefix_no_match_when_variable_differs(
+        self, stream_factory
+    ) -> None:
+        m = WaybillMatcherHasPrefix(prefixes=["{{ provider }}|"], field="name")
+        matched, _ = m.match_and_capture(
+            stream_factory(name="UK| BBC One"),
+            variables={"provider": "US"},
+        )
+        assert matched is False

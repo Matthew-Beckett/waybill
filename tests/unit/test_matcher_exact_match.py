@@ -72,3 +72,22 @@ class TestWaybillMatcherExactMatch:
             values=["BBC One"], field="name", case_sensitive=True
         )
         assert "case-sensitive" in m.describe()
+
+    def test_renders_template_in_value(self, stream_factory) -> None:
+        """Template expressions in values are rendered using variables scope."""
+        m = WaybillMatcherExactMatch(values=["{{ provider }}| BBC One"], field="name")
+        matched, _ = m.match_and_capture(
+            stream_factory(name="UK| BBC One"),
+            variables={"provider": "UK"},
+        )
+        assert matched is True
+
+    def test_template_value_no_match_when_variable_differs(
+        self, stream_factory
+    ) -> None:
+        m = WaybillMatcherExactMatch(values=["{{ provider }}| BBC One"], field="name")
+        matched, _ = m.match_and_capture(
+            stream_factory(name="UK| BBC One"),
+            variables={"provider": "US"},
+        )
+        assert matched is False

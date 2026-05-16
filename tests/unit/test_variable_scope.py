@@ -155,13 +155,14 @@ class TestVariableScope:
                 {"suffix": ConfigVariable(value="[Special]")},
                 "[Special] Sky One",
             ),
-            # Named capture group shadows a mutable predefined variable
+            # Named capture group shadows a mutable predefined variable.
+            # quality must also be declared so the capture reaches the template.
             (
                 "UK| Arsenal HD",
                 r"^UK\| (?P<ch_name>.+?) (?P<quality>HD|SD)$",
                 "{{ ch_name }} ({{ quality }})",
                 {"ch_name": ConfigVariable(value="Default", mutable=True)},
-                None,
+                {"quality": ConfigVariable(value="", mutable=True)},
                 "Arsenal (HD)",
             ),
         ],
@@ -197,6 +198,10 @@ class TestVariableScope:
         pipeline = _template_member(
             pattern=r"^UK\| (?P<ch_name>.+?) (?P<quality>HD|SD)$",
             template_value="{{ ch_name }} ({{ quality }})",
+            member_variables={
+                "ch_name": ConfigVariable(value="", mutable=True),
+                "quality": ConfigVariable(value="", mutable=True),
+            },
         )
         plan = pipeline.process()
         assert len(plan.channels) == 1
@@ -226,6 +231,10 @@ class TestVariableScope:
         pipeline = _template_member(
             pattern=r"^UK\| (?P<ch_name>.+?) (?P<quality>HD|SD)$",
             template_value="{{ ch_name }} ({{ quality }})",
+            member_variables={
+                "ch_name": ConfigVariable(value="", mutable=True),
+                "quality": ConfigVariable(value="", mutable=True),
+            },
         )
         plan = pipeline.process()
         channel_names = sorted(c.name for c in plan.channels)
@@ -241,6 +250,10 @@ class TestVariableScope:
         pipeline = _template_member(
             pattern=r"^UK\| (?P<ch_name>.+?) (?P<quality>HD|SD)$",
             template_value="{{ ch_name }} ({{ quality }})",
+            member_variables={
+                "ch_name": ConfigVariable(value="", mutable=True),
+                "quality": ConfigVariable(value="", mutable=True),
+            },
         )
         plan = pipeline.process()
         assert len(plan.channels) == 1

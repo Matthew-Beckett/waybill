@@ -40,14 +40,18 @@ class WaybillMatcherRegex(WaybillMatcherBase):
     ) -> "tuple[bool, dict[str, str]]":
         """Match the stream and return ``(matched, named_captures)``.
 
-        Named capture groups (``(?P<name>...)``) from a successful regex match
-        are returned as a dict.  For a ``drop`` action, a matched stream is
-        *rejected* (returns ``False``) with no captures; an unmatched stream
-        is *accepted* (returns ``True``) with no captures.
+        The regex pattern is rendered as a Jinja2 template using *variables*
+        before being compiled, allowing pattern values to reference predefined
+        pipeline variables.  Named capture groups (``(?P<name>...)``) from a
+        successful match are returned as a dict.  For a ``drop`` action, a
+        matched stream is *rejected* (returns ``False``) with no captures; an
+        unmatched stream is *accepted* (returns ``True``) with no captures.
         """
-        field_value = self._get_field_value(stream, variables=variables)
+        variables_ctx: dict[str, str] = variables if variables is not None else {}
+        rendered_pattern = self._render_value(self.pattern, variables_ctx)
+        field_value = self._get_field_value(stream, variables=variables_ctx)
         flags = 0 if self.case_sensitive else re.IGNORECASE
-        m = re.match(self.pattern, field_value, flags)
+        m = re.match(rendered_pattern, field_value, flags)
 
         if self.action == "drop":
             # Matched → stream is dropped; unmatched → stream is kept (no captures)

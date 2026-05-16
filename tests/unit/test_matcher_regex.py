@@ -139,3 +139,27 @@ class TestWaybillMatcherRegexCapture:
         assert ("captures" in desc) is expect_captures_annotation
         for name in expected_names:
             assert name in desc
+
+    def test_renders_template_in_pattern_with_variables(self, stream_factory) -> None:
+        """Template expressions in the pattern are rendered using the variables scope."""
+        m = WaybillMatcherRegex(
+            pattern=r"^{{ provider }}\| (?P<ch_name>.+)$", field="name"
+        )
+        matched, captures = m.match_and_capture(
+            stream_factory(name="UK| Arsenal"),
+            variables={"provider": "UK"},
+        )
+        assert matched is True
+        assert captures["ch_name"] == "Arsenal"
+
+    def test_template_in_pattern_no_match_when_variable_differs(
+        self, stream_factory
+    ) -> None:
+        m = WaybillMatcherRegex(
+            pattern=r"^{{ provider }}\| (?P<ch_name>.+)$", field="name"
+        )
+        matched, _ = m.match_and_capture(
+            stream_factory(name="UK| Arsenal"),
+            variables={"provider": "US"},
+        )
+        assert matched is False

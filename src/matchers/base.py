@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 from apps.channels.models import Stream
 
+from .._jinja import render_template
+
 if TYPE_CHECKING:
     from ..transformers.base import WaybillTransformerBase
 
@@ -40,6 +42,18 @@ class WaybillMatcherBase(ABC):
                     working = result
             return getattr(working, self.field)
         return getattr(stream, self.field)
+
+    def _render_value(self, value: str, variables: "dict[str, str]") -> str:
+        """Render *value* as a Jinja2 template using the current variable scope.
+
+        Delegates to :func:`render_template` with a context description
+        identifying this matcher class.
+        """
+        return render_template(
+            value,
+            variables,
+            context_desc=f"{type(self).__name__} matcher",
+        )
 
     @abstractmethod
     def _describe_self(self) -> str:

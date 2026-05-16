@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import jinja2
 import pytest
 
 from src.transformers.template import WaybillTransformerTemplate
@@ -39,7 +38,7 @@ class TestWaybillTransformerTemplate:
     def test_undefined_variable_raises(self, variables, stream_factory) -> None:
         t = WaybillTransformerTemplate(value="{{ missing }}", field="name")
         s = stream_factory()
-        with pytest.raises(jinja2.UndefinedError):
+        with pytest.raises(ValueError, match="Undefined template variable"):
             t.transform(s, variables=variables)
 
     def test_returns_stream_instance(self, stream_factory) -> None:

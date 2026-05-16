@@ -77,3 +77,22 @@ class TestWaybillMatcherContainsAny:
             substrings=["news"], field="name", case_sensitive=True
         )
         assert "case-sensitive" in m.describe()
+
+    def test_renders_template_in_substring(self, stream_factory) -> None:
+        """Template expressions in substring values are rendered using variables scope."""
+        m = WaybillMatcherContainsAny(substrings=["{{ keyword }}"], field="name")
+        matched, _ = m.match_and_capture(
+            stream_factory(name="BBC News"),
+            variables={"keyword": "News"},
+        )
+        assert matched is True
+
+    def test_template_substring_no_match_when_variable_differs(
+        self, stream_factory
+    ) -> None:
+        m = WaybillMatcherContainsAny(substrings=["{{ keyword }}"], field="name")
+        matched, _ = m.match_and_capture(
+            stream_factory(name="BBC News"),
+            variables={"keyword": "Sport"},
+        )
+        assert matched is False

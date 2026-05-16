@@ -40,6 +40,14 @@ spec:
             quality_suffix:
               value: " (Live)"
               mutable: true
+            # Declare capture-group names so they are visible to main transformers.
+            # These are overridden per-stream by the regex matcher's named groups.
+            ch_name:
+              value: ""
+              mutable: true
+            quality:
+              value: ""
+              mutable: true
           members:
 
 
@@ -92,6 +100,11 @@ spec:
         # Does NOT shadow quality_suffix, so it falls back to the profile default of "".
         premium_sports:
           name: Premium Sports
+          variables:
+            # Declare ch_name so the regex capture is visible to main transformers.
+            ch_name:
+              value: ""
+              mutable: true
           members:
 
             - name: Premium Channels

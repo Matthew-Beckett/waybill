@@ -45,6 +45,29 @@ def _empty_captures_dict() -> dict[str, str]:
     return {}
 
 
+def _empty_variable_events() -> "list[VariableEvent]":
+    return []
+
+
+@dataclass(frozen=True)
+class VariableEvent:
+    """Records a single variable assignment, override, discard, or read during stream processing.
+
+    ``event_type`` values:
+    - ``"init"``             — variable was initialised from a predefined (profile/group/member) value.
+    - ``"capture_override"`` — a regex capture group overwrote a declared predefined variable.
+    - ``"capture_discarded"``— a regex capture group name is NOT declared in any variables block;
+                               the value was NOT forwarded to main transformers.
+    - ``"template_read"``    — a transformer template expression referenced this variable.
+    """
+
+    name: str
+    event_type: str
+    value: str
+    old_value: str | None = None
+    source: str = ""
+
+
 @dataclass(frozen=True)
 class TransformStep:
     """Records the effect of a single transformer step on a stream name."""
@@ -84,6 +107,7 @@ class StreamRecord:
     order_reason: str | None = None
     captures: dict[str, str] = field(default_factory=_empty_captures_dict)
     steps: list[TransformStep] = field(default_factory=_empty_transform_steps)
+    variable_events: list[VariableEvent] = field(default_factory=_empty_variable_events)
 
 
 @dataclass(frozen=True)

@@ -78,6 +78,38 @@ class TestWaybillTransformerRegex:
         t.transform(s)
         assert s.name == "BBC One HD"
 
+    def test_renders_template_in_replacement(self, stream_factory) -> None:
+        t = WaybillTransformerRegex(
+            pattern=r"^DEMO\| ", action="replace", replacement="{{ prefix }}: "
+        )
+        s = stream_factory(name="DEMO| BBC One")
+        t.transform(s, variables={"prefix": "UK"})
+        assert s.name == "UK: BBC One"
+
+    def test_renders_template_in_pattern(self, stream_factory) -> None:
+        t = WaybillTransformerRegex(
+            pattern=r"^{{ strip_prefix }}\| ", action="replace", replacement=""
+        )
+        s = stream_factory(name="UK| BBC One")
+        t.transform(s, variables={"strip_prefix": "UK"})
+        assert s.name == "BBC One"
+
+    def test_undefined_template_variable_raises(self, stream_factory) -> None:
+        t = WaybillTransformerRegex(
+            pattern=r"^{{ missing }}\| ", action="replace", replacement=""
+        )
+        s = stream_factory(name="UK| BBC One")
+        with pytest.raises(ValueError, match="Undefined template variable"):
+            t.transform(s, variables={})
+
+    def test_template_field_strings_exposes_pattern_and_replacement(self) -> None:
+        t = WaybillTransformerRegex(
+            pattern=r"^{{ p }}", action="replace", replacement="{{ r }}"
+        )
+        pairs = dict(t.template_field_strings())
+        assert r"^{{ p }}" in pairs.values()
+        assert "{{ r }}" in pairs.values()
+
     def test_describe_replace(self) -> None:
         t = WaybillTransformerRegex(pattern=r"^UK: ", action="replace", replacement="")
         desc = t.describe()
