@@ -1,3 +1,5 @@
+import re
+
 from django.db.models import Q
 
 from ..types.config import ConfigMatcher, MatcherAction, MatcherType
@@ -74,7 +76,10 @@ def matcher_to_q(cfg: ConfigMatcher) -> Q:
         if cfg.transformers:
             # Cannot pre-filter accurately when field values will be transformed before matching
             return Q()
-        q = Q(**{f"{cfg.field}__iregex": cfg.pattern})
+        # PostgreSQL POSIX ERE does not support Python named capture groups (?P<name>...).
+        # Strip them to plain groups so the pattern is valid POSIX ERE.
+        posix_pattern = re.sub(r"\(\?P<\w+>", "(", cfg.pattern)
+        q = Q(**{f"{cfg.field}__iregex": posix_pattern})
         return ~q if is_drop else q
 
     if cfg.type == MatcherType.HAS_PREFIX:
