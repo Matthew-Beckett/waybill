@@ -1,0 +1,539 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: uk-freeview-public
+  description: >
+    UK free-to-air and public broadcast (PSB) channels sourced from the
+    iptv-org UK playlist (https://iptv-org.github.io/iptv/countries/uk.m3u).
+
+    The iptv-org feed has no "UK| " country prefix -- stream names are bare
+    titles with a resolution tag and optional "[Geo-blocked]" annotation,
+    e.g. "BBC One London (1080p) [Geo-blocked]".  This config demonstrates
+    how to handle that naming convention using Waybill's full matcher and
+    transformer toolset.
+
+    Scope: BBC public channels, ITV family, Channel 4 family, Channel 5, rolling
+    news (GB News, TalkTV, Sky News Weather), and a separate Kids profile for
+    CBBC and CBeebies.  No subscription channels, no show-specific persistent
+    channels, no "[Not 24/7]" curiosity streams.
+
+    Waybill features exercised:
+      - Regex matcher on tvg_id (stable identifier for BBC regional variants)
+      - hasPrefix matcher with pre-transformers (strip resolution before match)
+      - containsAny drop matchers (filter noise streams and dual-cast channels)
+      - exactMatch matcher on tvg_id field
+      - Named regex capture groups forwarded to template transformer (ITV family)
+      - strip, set, regex, setMetadata, template transformers
+      - count validators with fail and warn actions
+      - nonEmpty validator on tvg_id field
+      - Multiple profiles (freeview, kids)
+      - streamProfile and orderStreamsBy at profile, group, and member level
+      - null overrides for streamProfile and orderStreamsBy
+      - Immutable profile-level variable
+
+spec:
+  profiles:
+
+    # =========================================================================
+    # Profile: freeview
+    # The primary UK free-to-air channel list.
+    # =========================================================================
+    freeview:
+      name: Freeview
+      streamProfile: Proxy
+      orderStreamsBy: quality
+
+      # Profile-wide variable: minimum expected streams for health checks.
+      # Declared immutable so that no capture group can accidentally shadow it.
+      variables:
+        quality_tag_pattern:
+          value: "\\s+\\(\\d+p\\)(\\s+\\[.*\\]){0,1}$"
+          mutable: false
+
+      groups:
+
+        # -----------------------------------------------------------------
+        # Group: bbc -- BBC Public Service Broadcasting channels.
+        #
+        # BBC One and BBC Two each have many regional HD streams in this
+        # playlist (East, London, Scotland, Wales, etc.).  We match them all
+        # via their stable tvg_id prefix ("BBCOne.uk@", "BBCTwo.uk@") and
+        # collapse every variant into a single canonical channel.
+        #
+        # The playlist also carries some shared dual-cast streams, e.g.
+        # "BBC Three/CBBC" and "BBC Four/CBeebies".  containsAny drop
+        # matchers exclude those to avoid duplicates in the Kids profile.
+        # -----------------------------------------------------------------
+        bbc:
+          name: BBC
+
+          members:
+
+            - name: BBC One
+              # 1. Keep every stream whose tvg_id begins with "BBCOne.uk@".
+              #    This is safer than matching on the name, which varies by
+              #    region ("BBC One London", "BBC One Scotland HD", etc.).
+              # 2. Drop sub-HD streams (720p, 540p) -- quality ordering will
+              #    promote the 1080p streams anyway, but explicit drops keep
+              #    the plan clean and make intent clear.
+              matchers:
+                - type: regex
+                  field: tvg_id
+                  action: keep
+                  pattern: "^BBCOne\\.uk@"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - "(720p)"
+                    - "(540p)"
+                    - "[Not 24/7]"
+              transformers:
+                # Collapse "BBC One London (1080p) [Geo-blocked]" -> "BBC One"
+                # using a back-reference to the captured group.
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^(BBC One).*"
+                  replacement: "\\1"
+                - type: setMetadata
+                  name: "BBC One"
+                  tvgId: "BBCOne.uk"
+                  logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/BBC_One_logo_2021.svg/200px-BBC_One_logo_2021.svg.png"
+              validators:
+                # BBC One is a must-have channel; fail the plan if it vanishes.
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: fail
+                - type: nonEmpty
+                  field: tvg_id
+                  action: warn
+
+            - name: BBC Two
+              # Same approach as BBC One: match all regional variants by
+              # tvg_id, drop SD streams, normalise the name.
+              matchers:
+                - type: regex
+                  field: tvg_id
+                  action: keep
+                  pattern: "^BBCTwo\\.uk@"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - "(540p)"
+                    - "[Not 24/7]"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^(BBC Two).*"
+                  replacement: "\\1"
+                - type: setMetadata
+                  name: "BBC Two"
+                  tvgId: "BBCTwo.uk"
+                  logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/BBC_Two_logo_2021.svg/200px-BBC_Two_logo_2021.svg.png"
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: fail
+
+            - name: BBC Three
+              # BBC Three streams come in two flavours: a standalone entry
+              # ("BBC Three HD (1080p) [Geo-blocked]") and a dual-cast entry
+              # ("BBC Three/CBBC (1080p) [Geo-Blocked]").  We want only the
+              # standalone stream.
+              #
+              # Pre-transformer inside the hasPrefix matcher strips off the
+              # "(1080p) [Geo-blocked]" suffix *before* the prefix test runs,
+              # so "BBC Three HD" passes the "BBC Three" prefix check even
+              # though the raw name has more tokens after it.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "BBC Three"
+                  transformers:
+                    - type: regex
+                      field: name
+                      action: replace
+                      pattern: "\\s+\\(\\d+p\\)(\\s+\\[.*\\]){0,1}$"
+                      replacement: ""
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - "CBBC"   # exclude the shared BBC Three/CBBC dual-cast
+              transformers:
+                - type: set
+                  field: name
+                  value: "BBC Three"
+                - type: setMetadata
+                  tvgId: "BBCThree.uk"
+                  logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/BBC_Three_2022.svg/200px-BBC_Three_2022.svg.png"
+
+            - name: BBC Four
+              # Mirrors the BBC Three approach.  The dual-cast stream is
+              # "BBC Four/CBeebies" -- dropped here so CBeebies stays clean
+              # in the Kids profile.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "BBC Four"
+                  transformers:
+                    - type: regex
+                      field: name
+                      action: replace
+                      pattern: "\\s+\\(\\d+p\\)(\\s+\\[.*\\]){0,1}$"
+                      replacement: ""
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - "CBeebies"   # exclude the shared BBC Four/CBeebies dual-cast
+              transformers:
+                - type: set
+                  field: name
+                  value: "BBC Four"
+                - type: setMetadata
+                  tvgId: "BBCFour.uk"
+                  logoUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/BBC_Four_logo_2021.svg/200px-BBC_Four_logo_2021.svg.png"
+
+            - name: BBC Parliament
+              # Stable single stream -- match directly on tvg_id.
+              matchers:
+                - type: exactMatch
+                  field: tvg_id
+                  action: keep
+                  values:
+                    - "BBCParliament.uk@SD"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+\\(\\d+p\\)(\\s+\\[.*\\]){0,1}$"
+                  replacement: ""
+                - type: setMetadata
+                  name: "BBC Parliament"
+                  tvgId: "BBCParliament.uk"
+
+            - name: BBC Scotland
+              matchers:
+                - type: exactMatch
+                  field: tvg_id
+                  action: keep
+                  values:
+                    - "BBCScotland.uk@SD"
+              transformers:
+                - type: set
+                  field: name
+                  value: "BBC Scotland"
+                - type: setMetadata
+                  tvgId: "BBCScotland.uk"
+
+            - name: BBC Alba
+              # The Gaelic channel.  exactMatch on tvg_id avoids any risk of
+              # a "BBC Albania" or similar string accidentally matching a
+              # hasPrefix or containsAny rule.
+              matchers:
+                - type: exactMatch
+                  field: tvg_id
+                  action: keep
+                  values:
+                    - "BBCAlba.uk@SD"
+              transformers:
+                - type: set
+                  field: name
+                  value: "BBC Alba"
+                - type: setMetadata
+                  tvgId: "BBCAlba.uk"
+
+        # -----------------------------------------------------------------
+        # Group: itv -- ITV network channels.
+        #
+        # ITV1 through ITV4 share a consistent naming pattern:
+        #   "ITV1 (1080p)"       tvg_id: ITV1.uk@London
+        #   "ITV2 (1080p)"       tvg_id: ITV2.uk@SD
+        #   "ITV3 (1080p) [Geo-Blocked]"
+        #   "ITV4 (1080p) [Geo-Blocked]"
+        #
+        # A single member uses a named capture group to extract the channel
+        # identifier and a template transformer to produce a clean name from
+        # it -- one member drives four Dispatcharr channels.
+        # -----------------------------------------------------------------
+        itv:
+          name: ITV
+          streamProfile: Redirect   # ITV streams work better un-proxied
+          orderStreamsBy: null       # they have no quality variants
+          variables:
+            ch_name:
+              value: ""
+              mutable: true
+
+          members:
+
+            - name: ITV 1-4
+              # The pattern "^(?P<ch_name>ITV[1-4])\\s" extracts e.g. "ITV2"
+              # from "ITV2 (1080p)".  The variable ch_name receives the match
+              # and is forwarded to both the name and tvg_id template transforms.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^(?P<ch_name>ITV[1-4])\\s"
+              transformers:
+                - type: template
+                  field: name
+                  value: "{{ ch_name }}"
+                - type: template
+                  field: tvg_id
+                  value: "{{ ch_name | lower }}.uk"
+              validators:
+                # All four ITV channels should be present; warn if any go missing.
+                - type: count
+                  operator: gte
+                  value: 4
+                  action: warn
+
+        # -----------------------------------------------------------------
+        # Group: channel4 -- The Channel 4 family.
+        #
+        # The playlist carries:
+        #   Channel 4 (1080p)           -- tvg_id: Channel4.uk@UK
+        #   Channel 4 UK HD (1080p)     -- tvg_id: Channel4.uk@UKHD
+        #   E4 (1080p)                  -- tvg_id: E4.uk@SD
+        #   Film4 (1080p)               -- tvg_id: Film4.uk@SD
+        #   Film4 HD (1080p)            -- tvg_id: Film4.uk@HD
+        #   More4 HD (576p) [Geo-Blocked] -- tvg_id: More4.uk@HD
+        # -----------------------------------------------------------------
+        channel4:
+          name: Channel 4
+
+          members:
+
+            - name: Channel 4
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "Channel 4"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Channel 4"
+                - type: setMetadata
+                  tvgId: "Channel4.uk"
+                  logoUrl: "https://d2n0069hmnqmmx.cloudfront.net/epgdata/1.0/newchanlogos/512/512/skychb1621.png"
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: fail
+
+            - name: E4
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "E4"
+              transformers:
+                - type: set
+                  field: name
+                  value: "E4"
+                - type: setMetadata
+                  tvgId: "E4.uk"
+
+            - name: Film4
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "Film4"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Film4"
+                - type: setMetadata
+                  tvgId: "Film4.uk"
+                  logoUrl: "https://i.imgur.com/MTSgoGI.png"
+
+            - name: More4
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "More4"
+              transformers:
+                - type: set
+                  field: name
+                  value: "More4"
+                - type: setMetadata
+                  tvgId: "More4.uk"
+
+        # -----------------------------------------------------------------
+        # Group: channel5 -- Channel 5.
+        # Dispatcharr manages the stream profile for this provider.
+        # -----------------------------------------------------------------
+        channel5:
+          name: Channel 5
+          streamProfile: null     # defer stream-profile selection to Dispatcharr
+          orderStreamsBy: quality
+
+          members:
+
+            - name: Channel 5
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "Channel 5"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Channel 5"
+                - type: setMetadata
+                  tvgId: "Channel5.uk"
+                  logoUrl: "https://d2n0069hmnqmmx.cloudfront.net/epgdata/1.0/newchanlogos/512/512/skychb1800.png"
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: fail
+
+        # -----------------------------------------------------------------
+        # Group: news -- Rolling 24-hour UK news and current-affairs.
+        # These channels have no quality variants; disable quality ordering
+        # and let Dispatcharr manage stream profiles directly.
+        # -----------------------------------------------------------------
+        news:
+          name: News
+          streamProfile: null
+          orderStreamsBy: null
+
+          members:
+
+            - name: GB News
+              matchers:
+                - type: exactMatch
+                  field: tvg_id
+                  action: keep
+                  values:
+                    - "GBNews.uk@SD"
+              transformers:
+                - type: set
+                  field: name
+                  value: "GB News"
+                - type: setMetadata
+                  tvgId: "GBNews.uk"
+                  logoUrl: "https://upload.wikimedia.org/wikipedia/en/thumb/3/35/GB_News_Logo.svg/200px-GB_News_Logo.svg.png"
+
+            - name: TalkTV
+              matchers:
+                - type: exactMatch
+                  field: tvg_id
+                  action: keep
+                  values:
+                    - "TalkTV.uk@SD"
+              transformers:
+                - type: set
+                  field: name
+                  value: "TalkTV"
+                - type: setMetadata
+                  tvgId: "TalkTV.uk"
+
+            - name: Sky News Weather
+              # Matched by tvg_id -- the name "Sky News Weather (720p)"
+              # could in theory match unrelated provider streams that happen
+              # to include "Sky News" in their name.
+              matchers:
+                - type: exactMatch
+                  field: tvg_id
+                  action: keep
+                  values:
+                    - "SkyNewsWeather.uk@SD"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Sky News Weather"
+                - type: setMetadata
+                  tvgId: "SkyNewsWeather.uk"
+
+    # =========================================================================
+    # Profile: kids
+    # BBC children's channels, kept as a completely separate profile so that
+    # parental controls can be applied at the profile level in Dispatcharr.
+    # =========================================================================
+    kids:
+      name: Kids
+      streamProfile: Proxy
+      orderStreamsBy: null
+
+      groups:
+
+        bbc_kids:
+          name: BBC Children's
+
+          members:
+
+            - name: CBBC
+              # The playlist has a dual-cast "BBC Three/CBBC" stream as well
+              # as the dedicated "CBBC HD" stream.  We want only CBBC HD here;
+              # the drop matcher removes the dual-cast entry.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "CBBC"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - "BBC Three"   # exclude shared BBC Three/CBBC dual-cast
+              transformers:
+                - type: set
+                  field: name
+                  value: "CBBC"
+                - type: setMetadata
+                  tvgId: "CBBC.uk"
+                  logoUrl: "https://i.imgur.com/tk8G4CU.png"
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: warn
+
+            - name: CBeebies
+              # Mirror image of CBBC above: the dual-cast is "BBC Four/CBeebies".
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "CBeebies"
+                - type: containsAny
+                  field: name
+                  action: drop
+                  substrings:
+                    - "BBC Four"   # exclude shared BBC Four/CBeebies dual-cast
+              transformers:
+                - type: set
+                  field: name
+                  value: "CBeebies"
+                - type: setMetadata
+                  tvgId: "CBeebies.uk"
+              validators:
+                - type: count
+                  operator: gt
+                  value: 0
+                  action: warn
