@@ -54,7 +54,7 @@ def stream_factory():
     """Return a factory that builds lightweight stream-like namespaces."""
 
     def _make(
-        name: str = "BBC One",
+        name: str = "NBS One",
         tvg_id: str = "bbc.one",
         logo_url: str = "",
         **extra: str,

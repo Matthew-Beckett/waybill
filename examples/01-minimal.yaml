@@ -1,5 +1,43 @@
 kind: WaybillConfig
 version: v1alpha1
 metadata:
-  name: minimal-example
-  description: The absolute minimum valid WaybillConfig — only the three required top-level fields
+  name: my-first-config
+  description: >
+    The smallest useful WaybillConfig — a single channel picked out of your
+    Dispatcharr stream library and given a clean name.
+
+    IPTV providers typically name streams with a country prefix and a quality
+    suffix, for example "UK| NBS One HD" or "UK| NBS One FHD".  The matcher
+    below picks up every stream that starts with "UK| NBS One"; the transformer
+    replaces whatever the provider put there with the clean canonical title.
+
+    Run "waybill plan" against this file first to see what Dispatcharr streams
+    would be matched.  Once you are happy, copy the member block and add more
+    channels one at a time.
+
+spec:
+  profiles:
+    main:
+      name: Main
+
+      groups:
+        nbs:
+          name: NBS
+
+          members:
+
+            - name: NBS One
+              # A stream named "UK| NBS One HD" or "UK| NBS One FHD" will match.
+              # hasPrefix is the simplest option when you just need "starts with X".
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| NBS One"
+
+              # Overwrite whatever the provider called it with the clean title.
+              transformers:
+                - type: set
+                  field: name
+                  value: "NBS One"

@@ -47,17 +47,17 @@ class TestSingleWordConversion:
         self, number_transformer, stream_factory, monkeypatch
     ) -> None:
         monkeypatch.setattr(number_transformer, "_word_to_num", lambda w: w)
-        s = stream_factory(name="BBC HD")
+        s = stream_factory(name="NBS HD")
         number_transformer.transform(s)
-        assert s.name == "BBC HD"
+        assert s.name == "NBS HD"
 
     def test_existing_digits_left_unchanged(
         self, number_transformer, stream_factory, monkeypatch
     ) -> None:
         monkeypatch.setattr(number_transformer, "_word_to_num", lambda w: w)
-        s = stream_factory(name="BBC 1")
+        s = stream_factory(name="NBS 1")
         number_transformer.transform(s)
-        assert s.name == "BBC 1"
+        assert s.name == "NBS 1"
 
     def test_returns_stream_instance(
         self, number_transformer, stream_factory, monkeypatch
@@ -145,10 +145,10 @@ class TestAndConnectorHandling:
             "_word_to_num",
             lambda p: "1" if p.lower() == "one" else p,
         )
-        s = stream_factory(name="BBC One And ITV Two")
+        s = stream_factory(name="NBS One And VTN Two")
         number_transformer.transform(s)
         assert "And" in s.name or "AND" in s.name
-        assert s.name.startswith("BBC 1 And") or s.name.startswith("BBC 1 AND")
+        assert s.name.startswith("NBS 1 And") or s.name.startswith("NBS 1 AND")
 
     def test_trailing_and_not_consumed_by_span(
         self, number_transformer, stream_factory, monkeypatch
@@ -158,7 +158,7 @@ class TestAndConnectorHandling:
             "_word_to_num",
             lambda p: "1" if p.lower() in ("one", "one and") else p,
         )
-        s = stream_factory(name="BBC One And ITV")
+        s = stream_factory(name="NBS One And VTN")
         number_transformer.transform(s)
         assert "And" in s.name or "AND" in s.name
 
@@ -180,9 +180,9 @@ class TestWordMode:
         self, word_transformer, stream_factory, monkeypatch
     ) -> None:
         monkeypatch.setattr(word_transformer, "_num_to_word", lambda n: n)
-        s = stream_factory(name="BBC Sport")
+        s = stream_factory(name="NBS Sport")
         word_transformer.transform(s)
-        assert s.name == "BBC Sport"
+        assert s.name == "NBS Sport"
 
     def test_multiple_digits_all_converted(
         self, word_transformer, stream_factory, monkeypatch
@@ -225,7 +225,7 @@ class TestConvertCardinalNumbersIntegration:
         "digit_form, word_form",
         [
             ("Channel 1", "Channel ONE"),
-            ("BBC 1 HD 2", "BBC ONE HD TWO"),
+            ("NBS 1 HD 2", "NBS ONE HD TWO"),
         ],
     )
     def test_digit_to_word(self, digit_form, word_form, stream_factory) -> None:
@@ -246,9 +246,9 @@ class TestConvertCardinalNumbersIntegration:
         assert s.name == f"Channel {digit}"
 
     def test_non_number_words_unchanged(self, stream_factory) -> None:
-        s = stream_factory(name="BBC HD")
+        s = stream_factory(name="NBS HD")
         self._t("number").transform(s)
-        assert s.name == "BBC HD"
+        assert s.name == "NBS HD"
 
     @pytest.mark.parametrize(
         "word_form, digit",
@@ -281,9 +281,9 @@ class TestConvertCardinalNumbersIntegration:
         assert s.name == f"Channel {digit}"
 
     def test_and_connector_between_channels_preserved(self, stream_factory) -> None:
-        s = stream_factory(name="BBC One And ITV Two")
+        s = stream_factory(name="NBS One And VTN Two")
         self._t("number").transform(s)
-        assert s.name == "BBC 1 And ITV 2"
+        assert s.name == "NBS 1 And VTN 2"
 
     @pytest.mark.parametrize("n", range(1, 21))
     def test_round_trip_1_to_20(self, n, stream_factory) -> None:

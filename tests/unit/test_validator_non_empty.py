@@ -12,7 +12,7 @@ class TestWaybillValidatorNonEmpty:
     @pytest.mark.parametrize(
         "field, stream_kwargs, expected",
         [
-            ("name", {"name": "BBC One"}, True),
+            ("name", {"name": "NBS One"}, True),
             ("name", {"name": ""}, False),
             ("tvg_id", {"tvg_id": "bbc.one"}, True),
             ("tvg_id", {"tvg_id": ""}, False),

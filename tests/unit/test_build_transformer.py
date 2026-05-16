@@ -33,11 +33,11 @@ class TestBuildTransformer:
         assert isinstance(build_transformer(cfg), WaybillTransformerStrip)
 
     def test_builds_set_transformer(self) -> None:
-        cfg = ConfigTransformer(type=TransformerType.SET, value="BBC One")
+        cfg = ConfigTransformer(type=TransformerType.SET, value="NBS One")
         assert isinstance(build_transformer(cfg), WaybillTransformerSet)
 
     def test_builds_set_metadata_transformer(self) -> None:
-        cfg = ConfigTransformer(type=TransformerType.SET_METADATA, name="BBC One")
+        cfg = ConfigTransformer(type=TransformerType.SET_METADATA, name="NBS One")
         assert isinstance(build_transformer(cfg), WaybillTransformerSetMetadata)
 
     def test_builds_convert_cardinal_numbers_transformer(self) -> None:
@@ -68,10 +68,10 @@ class TestBuildTransformer:
         assert t.suffix == " HD"
 
     def test_set_propagates_value(self) -> None:
-        cfg = ConfigTransformer(type=TransformerType.SET, value="BBC One")
+        cfg = ConfigTransformer(type=TransformerType.SET, value="NBS One")
         t = build_transformer(cfg)
         assert isinstance(t, WaybillTransformerSet)
-        assert t.value == "BBC One"
+        assert t.value == "NBS One"
 
     def test_convert_cardinal_numbers_enum_output_type(self) -> None:
         cfg = ConfigTransformer(

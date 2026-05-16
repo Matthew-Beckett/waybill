@@ -38,7 +38,7 @@ class TestBuildMatcher:
 
     def test_builds_has_prefix_matcher(self) -> None:
         assert isinstance(
-            build_matcher(_cfg(MatcherType.HAS_PREFIX, prefixes=["BBC"])),
+            build_matcher(_cfg(MatcherType.HAS_PREFIX, prefixes=["NBS"])),
             WaybillMatcherHasPrefix,
         )
 
@@ -50,7 +50,7 @@ class TestBuildMatcher:
 
     def test_builds_exact_match_matcher(self) -> None:
         assert isinstance(
-            build_matcher(_cfg(MatcherType.EXACT_MATCH, values=["BBC One"])),
+            build_matcher(_cfg(MatcherType.EXACT_MATCH, values=["NBS One"])),
             WaybillMatcherExactMatch,
         )
 
@@ -67,14 +67,14 @@ class TestBuildMatcher:
         assert m.case_sensitive is True
 
     def test_regex_propagates_pattern(self) -> None:
-        m = build_matcher(_cfg(MatcherType.REGEX, pattern=r"^BBC"))
+        m = build_matcher(_cfg(MatcherType.REGEX, pattern=r"^NBS"))
         assert isinstance(m, WaybillMatcherRegex)
-        assert m.pattern == r"^BBC"
+        assert m.pattern == r"^NBS"
 
     def test_has_prefix_propagates_prefixes(self) -> None:
-        m = build_matcher(_cfg(MatcherType.HAS_PREFIX, prefixes=["BBC", "ITV"]))
+        m = build_matcher(_cfg(MatcherType.HAS_PREFIX, prefixes=["NBS", "VTN"]))
         assert isinstance(m, WaybillMatcherHasPrefix)
-        assert m._display_prefixes == ["BBC", "ITV"]
+        assert m._display_prefixes == ["NBS", "VTN"]
 
     def test_contains_any_propagates_substrings(self) -> None:
         m = build_matcher(_cfg(MatcherType.CONTAINS_ANY, substrings=["News", "Sport"]))
@@ -82,6 +82,6 @@ class TestBuildMatcher:
         assert m._display_substrings == ["News", "Sport"]
 
     def test_exact_match_propagates_values(self) -> None:
-        m = build_matcher(_cfg(MatcherType.EXACT_MATCH, values=["BBC One", "BBC Two"]))
+        m = build_matcher(_cfg(MatcherType.EXACT_MATCH, values=["NBS One", "NBS Two"]))
         assert isinstance(m, WaybillMatcherExactMatch)
-        assert m._display_values == ["BBC One", "BBC Two"]
+        assert m._display_values == ["NBS One", "NBS Two"]

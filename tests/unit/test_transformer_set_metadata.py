@@ -62,8 +62,8 @@ class TestWaybillTransformerSetMetadata:
 
     def test_renders_template_in_name(self, stream) -> None:
         t = WaybillTransformerSetMetadata(name="{{ brand }} Channel")
-        t.transform(stream, variables={"brand": "BBC"})
-        assert stream.name == "BBC Channel"
+        t.transform(stream, variables={"brand": "NBS"})
+        assert stream.name == "NBS Channel"
 
     def test_renders_template_in_tvg_id(self, stream) -> None:
         t = WaybillTransformerSetMetadata(tvg_id="{{ ch_name }}.demo")

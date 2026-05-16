@@ -1,137 +1,189 @@
 kind: WaybillConfig
 version: v1alpha1
 metadata:
-  name: transformers-example
+  name: transformers-reference
   description: >
-    Demonstrates all five transformer types (regex, convertCardinalNumbers, strip, set,
-    setMetadata)
-    with every supported option, including multi-step transformation pipelines and
-    transformers targeting non-default stream fields.
+    Reference guide for all six transformer types used to clean up stream
+    names and set channel metadata.
+
+    IPTV providers rarely give streams the tidy names you want to display.
+    They add provider prefixes ("UK| "), quality suffixes (" HD", " FHD"),
+    inconsistent capitalisation ("NBS ONE" vs "NBS One"), or extra whitespace.
+    Transformers run after a stream has been matched and rewrite its fields
+    before Dispatcharr stores the channel.
+
+    Transformers run in declaration order, so you can chain them: strip the
+    provider prefix, then strip the quality suffix, then set the logo.
+
 spec:
   profiles:
-    default:
-      name: Default
+    main:
+      name: Main
+
       groups:
 
-        regex_transformers:
-          name: Regex Transformers
+        # ── strip ─────────────────────────────────────────────────────────
+        strip_examples:
+          name: Strip — Remove Fixed Prefixes and Suffixes
           members:
 
-            - name: Strip country prefix (regex replace)
-              # Replaces the matched portion with the replacement string.
-              # Back-references ($1, $2 ...) in replacement refer to capture groups.
+            - name: NBS One — strip provider prefix (strip prefix)
+              # "UK| NBS One HD"  →  "NBS One HD"
+              # strip removes a literal string from the start or end of the
+              # field.  If the prefix is absent on a stream, strip does nothing
+              # rather than failing, so it is safe to apply broadly.
               matchers:
                 - type: hasPrefix
                   field: name
                   action: keep
                   prefixes:
-                    - "DEMO| Vista One"
+                    - "UK| NBS One"
               transformers:
-                - type: regex
+                - type: strip
                   field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
+                  prefix: "UK| "
 
-            - name: Extract channel name from complex string (regex capture group)
+            - name: Arena Sports — strip prefix and suffix together (strip prefix + suffix)
+              # "UK| Arena Sports 1 HD"  →  "Arena Sports 1"
+              # Supply both prefix and suffix in the same transformer.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| Arena Sports"
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "UK| "
+                  suffix: " HD"
+
+        # ── regex ─────────────────────────────────────────────────────────
+        regex_examples:
+          name: Regex — Pattern-based Rewriting
+          members:
+
+            - name: VTN — strip any provider prefix (regex replace)
+              # "UK| VTN1 HD"  →  "VTN1 HD"
+              # The pattern matches any "XX| " prefix so this member keeps
+              # working if you switch to a provider that uses "GBR| " or "EN| ".
               matchers:
                 - type: regex
                   field: name
                   action: keep
-                  pattern: ".*\\bNBS\\s+[1-4]\\b.*"
+                  pattern: "^UK\\| VTN[1-4] HD$"
               transformers:
                 - type: regex
                   field: name
                   action: replace
-                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
-                  replacement: "$1"
+                  pattern: "^[A-Z]+\\| "    # strips any "XX| " country prefix
+                  replacement: ""
 
-            - name: Normalise whitespace (regex replace with back-reference)
+            - name: Arena Sports — chained regex (multi-step pipeline)
+              # Step 1: "UK| Arena Sports 1 HD"  →  "Arena Sports 1 HD"
+              # Step 2: "Arena Sports 1 HD"       →  "Arena Sports 1"
+              # Two focused patterns are easier to read and maintain than one
+              # large expression that tries to do everything at once.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| Arena Sports"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^UK\\| "
+                  replacement: ""
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+(HD|FHD|UHD|SD)$"    # strips any quality suffix
+                  replacement: ""
+
+            - name: Rewrite tvg_id (regex on a non-name field)
+              # Transformers can target any stream field, not just name.
+              # Here the raw tvg_id from the provider is rewritten to match
+              # what your EPG source expects.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| Apex TV"
+              transformers:
+                - type: regex
+                  field: tvg_id
+                  action: replace
+                  pattern: "^apex-(.+)\\.raw$"
+                  replacement: "$1.apex.demo"
+
+        # ── set ───────────────────────────────────────────────────────────
+        set_examples:
+          name: Set — Hard-code a Specific Value
+          members:
+
+            - name: Vista One — force canonical name (set)
+              # set overwrites the field with a literal value regardless of
+              # what the stream had before.  Use it when your matcher is
+              # already precise enough and you just want a clean fixed name.
+              matchers:
+                - type: exactMatch
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  values:
+                    - "uk| vista one hd"
+                    - "uk| vista one hd"
+                    - "uk| vista one hd"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Vista One"
+
+            - name: Crestwood — set name and tvg_id (multiple set transformers)
+              # You can chain set transformers to update multiple fields.
+              matchers:
+                - type: containsAny
+                  field: name
+                  action: keep
+                  caseSensitive: false
+                  substrings:
+                    - "crestwood"
+              transformers:
+                - type: set
+                  field: name
+                  value: "Crestwood"
+                - type: set
+                  field: tvg_id
+                  value: "crestwood.demo"
+
+        # ── setMetadata ───────────────────────────────────────────────────
+        set_metadata_examples:
+          name: SetMetadata — Name, Logo, and TVG-ID in One Step
+          members:
+
+            - name: NBS News — full metadata (setMetadata all fields)
+              # setMetadata sets name, logoUrl, and tvg_id in a single declaration.
+              # It is cleaner than three separate "set" transformers when you
+              # know the exact values for all three fields up front.
               matchers:
                 - type: containsAny
                   field: name
                   action: keep
                   substrings:
-                    - "Beacon"
+                    - "NBS News"
               transformers:
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "\\s{2,}"
-                  replacement: " "
+                - type: setMetadata
+                  name: "NBS News"
+                  logoUrl: "https://images.dispatcharr.example/logos/nbs-news.png"
+                  tvgId: "nbs.news.demo"
 
-            - name: Transform tvg_id field (regex on non-name field)
-              matchers:
-                - type: hasPrefix
-                  field: name
-                  action: keep
-                  prefixes:
-                    - "DEMO| NBS"
-              transformers:
-                - type: regex
-                  field: tvg_id
-                  action: replace
-                  pattern: "^(nbs1|nbs2|nbs3|nbs4)\\.demo$"
-                  replacement: "nbs-$1"
-
-        cardinal_transformers:
-          name: Cardinal Number Transformers
-          members:
-
-            - name: Words to digits (outputType number)
-              # Converts cardinal words to digits: "ONE" -> "1", "FOUR" -> "4", etc.
-              matchers:
-                - type: regex
-                  field: name
-                  action: keep
-                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
-              transformers:
-                - type: convertCardinalNumbers
-                  field: name
-                  outputType: number
-
-            - name: Digits to words (outputType word)
-              # Converts digits to uppercase words: "4" -> "FOUR", "1" -> "ONE", etc.
-              matchers:
-                - type: regex
-                  field: name
-                  action: keep
-                  pattern: ".*Beacon [1-9].*"
-              transformers:
-                - type: convertCardinalNumbers
-                  field: name
-                  outputType: word
-
-            - name: Cardinal conversion chained with regex (multi-step)
-              # Demonstrates chaining: regex first strips the prefix, then
-              # convertCardinalNumbers normalises the number, then regex extracts
-              # the canonical form.
-              matchers:
-                - type: regex
-                  field: name
-                  action: keep
-                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
-              transformers:
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
-                - type: convertCardinalNumbers
-                  field: name
-                  outputType: number
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
-                  replacement: "$1"
-
-        strip_transformers:
-          name: Strip Transformers
-          members:
-
-            - name: Strip prefix only
-              # Removes the prefix from the field value if it is present.
+            - name: Orbit News — logo and tvg_id only (setMetadata partial)
+              # You do not have to set all three fields.  Omit any you want
+              # Dispatcharr to manage on its own.  Here the name is already
+              # clean after strip, so only logo and tvg_id are set.
               matchers:
                 - type: containsAny
                   field: name
@@ -141,131 +193,59 @@ spec:
               transformers:
                 - type: strip
                   field: name
-                  prefix: "DEMO| "
-
-            - name: Strip suffix only
-              # Removes the suffix from the field value if it is present.
-              matchers:
-                - type: containsAny
-                  field: name
-                  action: keep
-                  substrings:
-                    - "NBS"
-              transformers:
-                - type: strip
-                  field: name
+                  prefix: "UK| "
                   suffix: " HD"
+                - type: setMetadata
+                  logoUrl: "https://images.dispatcharr.example/logos/orbit-news.png"
+                  tvgId: "orbit.news.demo"
 
-            - name: Strip both prefix and suffix
-              # Both prefix and suffix are stripped in a single transformer.
+        # ── convertCardinalNumbers ────────────────────────────────────────
+        cardinal_examples:
+          name: ConvertCardinalNumbers — Words ↔ Digits
+          members:
+
+            - name: VTN — words to digits (outputType number)
+              # Some providers name the channel "UK| VTN ONE HD" (word form);
+              # others use "UK| VTN1 HD" (digit, no space).
+              # convertCardinalNumbers normalises every stream to the same form
+              # before the name is stored, so downstream tools see consistent
+              # channel names.
+              # "VTN ONE"  →  "VTN 1"
+              # "VTN TWO"  →  "VTN 2"
               matchers:
                 - type: regex
                   field: name
                   action: keep
-                  pattern: "^DEMO\\|.*\\bVista\\b.*FHD$"
+                  pattern: ".*VTN.*(ONE|TWO|THREE|FOUR|1|2|3|4).*"
+              transformers:
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "^UK\\| "
+                  replacement: ""
+                - type: convertCardinalNumbers
+                  field: name
+                  outputType: number
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+(HD|FHD)$"
+                  replacement: ""
+
+            - name: NBS — digits to words (outputType word)
+              # "NBS 1"  →  "NBS ONE"
+              # Less common, but useful if your EPG source or Kodi skin expects
+              # the word form of numbered channels.
+              matchers:
+                - type: regex
+                  field: name
+                  action: keep
+                  pattern: "^UK\\| NBS [1-4]"
               transformers:
                 - type: strip
                   field: name
-                  prefix: "DEMO| "
-                  suffix: " FHD"
-
-            - name: Strip on non-name field
-              matchers:
-                - type: hasPrefix
+                  prefix: "UK| "
+                  suffix: " HD"
+                - type: convertCardinalNumbers
                   field: name
-                  action: keep
-                  prefixes:
-                    - "DEMO| Velocity Sport"
-              transformers:
-                - type: strip
-                  field: tvg_id
-                  prefix: "demo-"
-
-        set_transformers:
-          name: Set Transformers
-          members:
-
-            - name: Assign canonical name (set field to static value)
-              # Regardless of how many variant streams match, they all get the same
-              # canonical name after this transformer runs.
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  values:
-                    - "DEMO| Crestwood One"
-                    - "DEMO| Crestwood One HD"
-                    - "DEMO| CrestwoodOne"
-              transformers:
-                - type: set
-                  field: name
-                  value: "Crestwood One"
-
-            - name: Set tvg_id to a known value (set on non-name field)
-              matchers:
-                - type: containsAny
-                  field: name
-                  action: keep
-                  substrings:
-                    - "Meridian World"
-              transformers:
-                - type: set
-                  field: tvg_id
-                  value: "meridianworld.demo"
-
-            - name: Set after matching then override specific attribute
-              # Matches broadly, then normalises the name and stamps a fixed tvg_id.
-              matchers:
-                - type: regex
-                  field: name
-                  action: keep
-                  pattern: ".*\\bGlobe Report\\b.*"
-              transformers:
-                - type: set
-                  field: name
-                  value: "Globe Report"
-                - type: set
-                  field: tvg_id
-                  value: "globereport.demo"
-
-        set_metadata_transformers:
-          name: Set Metadata Transformers
-          members:
-
-            - name: Assign canonical name (setMetadata name)
-              matchers:
-                - type: exactMatch
-                  field: name
-                  action: keep
-                  values:
-                    - "DEMO| Crestwood One"
-                    - "DEMO| Crestwood One HD"
-                    - "DEMO| CrestwoodOne"
-              transformers:
-                - type: setMetadata
-                  name: "Crestwood One"
-
-            - name: Set canonical name and tvgId in one transformer
-              # setMetadata can update multiple explicit metadata fields in one step.
-              matchers:
-                - type: regex
-                  field: name
-                  action: keep
-                  pattern: ".*\\bGlobe Report\\b.*"
-              transformers:
-                - type: setMetadata
-                  name: "Globe Report"
-                  tvgId: "globereport.demo"
-
-            - name: Set all supported setMetadata fields
-              matchers:
-                - type: containsAny
-                  field: name
-                  action: keep
-                  substrings:
-                    - "Meridian World"
-              transformers:
-                - type: setMetadata
-                  name: "Meridian World"
-                  logoUrl: "https://images.example.com/logos/meridian-world.png"
-                  tvgId: "meridianworld.demo"
+                  outputType: word

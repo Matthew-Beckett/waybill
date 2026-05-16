@@ -3,50 +3,75 @@ version: v1alpha1
 metadata:
   name: validators-example
   description: >
-    Demonstrates all three validator types (count, regexMatch, nonEmpty) with both
-    action levels (warn, fail), count validators at both supported scopes
-    (member, channel), and combining multiple validators on a single member.
+    Demonstrates all three validator types and how to use them as automated
+    feed-health checks.
+
+    IPTV providers change stream names without warning.  A channel gets
+    renamed, drops off the feed, or gains a new quality suffix overnight.
+    You won't notice until someone in your household complains they can't
+    watch something.
+
+    Validators let Waybill catch these problems automatically:
+
+      count      -- "NBS One must always have at least one stream.  If it
+                    disappears, fail the plan before anything is applied."
+
+      regexMatch -- "After transformation the channel name must look like
+                    'Arena Sports N'.  If it doesn't, something went wrong."
+
+      nonEmpty   -- "Every channel must have a tvg_id.  Without it the EPG
+                    guide won't work."
+
+    action: warn  -- logs the violation but continues.  Use for soft checks.
+    action: fail  -- logs and aborts execution before any DB write.  Use for
+                    critical checks where a wrong result is worse than no
+                    result.
+
 spec:
   profiles:
-    default:
-      name: Default
+    main:
+      name: Main
+
       groups:
 
+        # -----------------------------------------------------------------
+        # count validator
+        # Checks the number of channels a member produces (scope: member)
+        # or the number of streams in a channel (scope: channel).
+        # -----------------------------------------------------------------
         count_validators:
           name: Count Validators
           members:
 
-            - name: Arena Sports (count gt 0 — warn)
-              # The most common use-case from the issue: alert if no streams were matched,
-              # which almost always indicates a feed outage or an upstream name change.
-              # action: warn means the violation is logged but execution continues.
+            - name: NBS One (count -- fail if missing)
+              # The most important check: if NBS One has zero streams in the
+              # feed you want to know immediately.  action: fail aborts the
+              # plan before any channel is written to Dispatcharr.
               matchers:
-                - type: regex
+                - type: hasPrefix
                   field: name
                   action: keep
-                  pattern: "^DEMO\\| Arena Sports.*"
+                  prefixes:
+                    - "UK| NBS One"
               transformers:
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
+                - type: setMetadata
+                  name: "NBS One"
+                  tvgId: "nbs.one.demo"
               validators:
                 - type: count
                   scope: member
                   operator: gt
                   value: 0
-                  action: warn
+                  action: fail
 
-            - name: NBS News (count gt 0 — fail)
-              # action: fail logs the violation, renders it in the plan, then raises an
-              # error before any database write (or before plan exits cleanly).
+            - name: NBS News (count -- warn if missing)
+              # action: warn logs the problem but the plan continues.
+              # Use this for channels that are nice-to-have but not critical.
               matchers:
                 - type: containsAny
                   field: name
                   action: keep
                   substrings:
-                    - "NBS NEWS"
                     - "NBS News"
               transformers:
                 - type: set
@@ -57,68 +82,46 @@ spec:
                   scope: member
                   operator: gt
                   value: 0
-                  action: fail
+                  action: warn
 
-            - name: Vista One HD (count lte 3 — warn)
-              # Assert an upper bound: more than 3 streams for a single channel usually
-              # means a matcher is too broad and is capturing unrelated feeds.
+            - name: Arena Sports 1 (count -- warn if too many streams)
+              # An upper-bound check: if Arena Sports 1 suddenly has more than
+              # 5 streams your matcher may be too broad and picking up related
+              # channels (Arena Sports 1 Extra, Arena Sports 1 HD2, etc.).
               matchers:
-                - type: hasPrefix
+                - type: regex
                   field: name
                   action: keep
-                  prefixes:
-                    - "DEMO| Vista One"
-                - type: regex
-                  field: name
-                  action: drop
-                  pattern: ".*\\bSD\\b.*"
+                  pattern: "^UK\\| Arena Sports 1 (HD|FHD)$"
               transformers:
-                - type: regex
+                - type: set
                   field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
+                  value: "Arena Sports 1"
               validators:
                 - type: count
                   scope: channel
                   operator: lte
-                  value: 3
+                  value: 5
                   action: warn
 
+        # -----------------------------------------------------------------
+        # regexMatch validator
+        # Checks that a field value matches a pattern after transformation.
+        # -----------------------------------------------------------------
         regex_match_validators:
           name: RegexMatch Validators
           members:
 
-            - name: Apex TV (regexMatch on name — warn)
-              # After transformation, assert each transformed stream name looks as expected.
-              # The default scope is stream, so this checks every contributing stream.
-              matchers:
-                - type: hasPrefix
-                  field: name
-                  action: keep
-                  prefixes:
-                    - "DEMO| Apex TV"
-              transformers:
-                - type: regex
-                  field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
-              validators:
-                - type: regexMatch
-                  field: name
-                  pattern: "^Apex TV"
-                  action: warn
-
-            - name: NBS 1-4 (regexMatch on channel name — fail)
-              # A strict final-name check against the assembled channel after merging.
-              # This is useful when you care about the emitted channel metadata rather
-              # than each individual contributing stream.
+            - name: VTN 1-4 (regexMatch -- verify name after transformation)
+              # After stripping the prefix and suffix, every stream name
+              # should look like "VTN 1", "VTN 2", etc.  If a provider adds
+              # an unexpected character the transformer output will fail this
+              # check and you'll know immediately.
               matchers:
                 - type: regex
                   field: name
                   action: keep
-                  pattern: ".*NBS (ONE|TWO|THREE|FOUR|1|2|3|4).*"
+                  pattern: ".*VTN.*(ONE|TWO|THREE|FOUR|1|2|3|4).*"
               transformers:
                 - type: convertCardinalNumbers
                   field: name
@@ -126,53 +129,86 @@ spec:
                 - type: regex
                   field: name
                   action: replace
-                  pattern: "^.*\\b(NBS\\s+[1-4])\\b.*$"
-                  replacement: "$1"
+                  pattern: "^UK\\| "
+                  replacement: ""
+                - type: regex
+                  field: name
+                  action: replace
+                  pattern: "\\s+(HD|FHD)$"
+                  replacement: ""
+              validators:
+                # scope: stream checks every individual transformed stream.
+                - type: regexMatch
+                  scope: stream
+                  field: name
+                  pattern: "^VTN [1-4]$"
+                  action: warn
+
+            - name: Apex TV family (regexMatch -- verify channel name)
+              # scope: channel checks the final assembled channel after
+              # merging; useful when you care about the emitted metadata
+              # rather than each individual contributing stream.
+              matchers:
+                - type: hasPrefix
+                  field: name
+                  action: keep
+                  prefixes:
+                    - "UK| Apex TV"
+                    - "UK| Apex 2"
+              transformers:
+                - type: strip
+                  field: name
+                  prefix: "UK| "
+                  suffix: " HD"
               validators:
                 - type: regexMatch
                   scope: channel
                   field: name
-                  pattern: "^NBS [1-4]$"
+                  pattern: "^(Apex TV|Apex 2)$"
                   action: fail
 
+        # -----------------------------------------------------------------
+        # nonEmpty validator
+        # Checks that a field is not blank after transformation.
+        # -----------------------------------------------------------------
         non_empty_validators:
           name: NonEmpty Validators
           members:
 
-            - name: Arena Sports EPG check (nonEmpty tvg_id — warn)
-              # Assert that each transformed stream carries EPG metadata.
-              # A violation means one or more upstream streams are missing guide data.
+            - name: Arena Sports (nonEmpty tvg_id -- EPG check)
+              # If the transformed stream has no tvg_id the programme guide
+              # will show no listings for that channel.  action: warn flags
+              # the problem so you can add the tvg_id via setMetadata.
               matchers:
-                - type: regex
+                - type: hasPrefix
                   field: name
                   action: keep
-                  pattern: "^DEMO\\| Arena Sports.*"
+                  prefixes:
+                    - "UK| Arena Sports"
               transformers:
-                - type: regex
+                - type: strip
                   field: name
-                  action: replace
-                  pattern: "^DEMO\\| "
-                  replacement: ""
+                  prefix: "UK| "
+                  suffix: " HD"
               validators:
                 - type: nonEmpty
+                  scope: stream
                   field: tvg_id
                   action: warn
 
-            - name: NBS News logo + EPG (nonEmpty channel metadata — fail)
-              # Require the final assembled channel metadata to include both logo_url and
-              # tvg_id; a missing value is a hard failure because the emitted channel would
-              # be incomplete in this profile.
+            - name: NBS News (nonEmpty logo + tvg_id -- full metadata check)
+              # Require both logo_url and tvg_id on the assembled channel.
+              # Missing either means the channel is incomplete in Dispatcharr.
               matchers:
                 - type: containsAny
                   field: name
                   action: keep
                   substrings:
-                    - "NBS NEWS"
                     - "NBS News"
               transformers:
-                - type: set
-                  field: name
-                  value: "NBS News"
+                - type: setMetadata
+                  name: "NBS News"
+                  tvgId: "nbs.news.demo"
               validators:
                 - type: nonEmpty
                   scope: channel
@@ -181,31 +217,31 @@ spec:
                 - type: nonEmpty
                   scope: channel
                   field: logo_url
-                  action: fail
+                  action: warn
 
+        # -----------------------------------------------------------------
+        # Combined validators
+        # Multiple validators on one member act as a full sanity-check suite.
+        # -----------------------------------------------------------------
         combined_validators:
-          name: Combined Validators
+          name: Combined Validators -- Full Channel Sanity Check
           members:
 
-            - name: NBS Four (count + regexMatch + nonEmpty)
-              # All three validator types together as a complete sanity-check suite:
-              #   1. At least one channel must be produced (count, member scope).
-              #   2. Every transformed stream name must match "NBS 4" (regexMatch).
-              #   3. Every transformed stream must carry EPG metadata (nonEmpty).
+            - name: NBS One (count + regexMatch + nonEmpty)
+              # Three checks together:
+              #   1. At least one stream must be matched (count).
+              #   2. The final channel name must be exactly "NBS One" (regexMatch).
+              #   3. Every stream must carry a tvg_id for the EPG guide (nonEmpty).
               matchers:
-                - type: exactMatch
+                - type: hasPrefix
                   field: name
                   action: keep
-                  caseSensitive: false
-                  values:
-                    - "demo| nbs four hd"
-                    - "demo| nbs four"
-                    - "demo| nbs 4 hd"
-                    - "demo| nbs 4"
+                  prefixes:
+                    - "UK| NBS One"
               transformers:
-                - type: set
-                  field: name
-                  value: "NBS 4"
+                - type: setMetadata
+                  name: "NBS One"
+                  tvgId: "nbs.one.demo"
               validators:
                 - type: count
                   scope: member
@@ -213,9 +249,11 @@ spec:
                   value: 0
                   action: fail
                 - type: regexMatch
+                  scope: channel
                   field: name
-                  pattern: "^NBS 4$"
+                  pattern: "^NBS One$"
                   action: fail
                 - type: nonEmpty
+                  scope: stream
                   field: tvg_id
                   action: warn

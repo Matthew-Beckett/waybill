@@ -15,34 +15,34 @@ def stream(stream_factory):
 class TestWaybillTransformerRegex:
     def test_replace_substitutes_matched_text(self, stream_factory) -> None:
         t = WaybillTransformerRegex(pattern=r"^UK: ", action="replace", replacement="")
-        s = stream_factory(name="UK: BBC One")
+        s = stream_factory(name="UK: NBS One")
         result = t.transform(s)
         assert result is s
-        assert s.name == "BBC One"
+        assert s.name == "NBS One"
 
     def test_replace_with_backreference(self, stream_factory) -> None:
         t = WaybillTransformerRegex(
             pattern=r"^(\w+).*", action="replace", replacement="$1"
         )
-        s = stream_factory(name="BBC One HD")
+        s = stream_factory(name="NBS One HD")
         t.transform(s)
-        assert s.name == "BBC"
+        assert s.name == "NBS"
 
     def test_replace_no_match_leaves_name_unchanged(self, stream_factory) -> None:
         t = WaybillTransformerRegex(pattern=r"^XYZ", action="replace", replacement="")
-        s = stream_factory(name="BBC One")
+        s = stream_factory(name="NBS One")
         t.transform(s)
-        assert s.name == "BBC One"
+        assert s.name == "NBS One"
 
     def test_drop_returns_none_when_pattern_matches(self, stream_factory) -> None:
         t = WaybillTransformerRegex(pattern=r"HD$", action="drop")
-        assert t.transform(stream_factory(name="BBC One HD")) is None
+        assert t.transform(stream_factory(name="NBS One HD")) is None
 
     def test_drop_returns_stream_when_pattern_does_not_match(
         self, stream_factory
     ) -> None:
         t = WaybillTransformerRegex(pattern=r"HD$", action="drop")
-        s = stream_factory(name="BBC One SD")
+        s = stream_factory(name="NBS One SD")
         assert t.transform(s) is s
 
     def test_replace_on_tvg_id_field(self, stream_factory) -> None:
@@ -74,31 +74,31 @@ class TestWaybillTransformerRegex:
 
     def test_replace_global_substitution(self, stream_factory) -> None:
         t = WaybillTransformerRegex(pattern=r"\s+", action="replace", replacement=" ")
-        s = stream_factory(name="BBC   One    HD")
+        s = stream_factory(name="NBS   One    HD")
         t.transform(s)
-        assert s.name == "BBC One HD"
+        assert s.name == "NBS One HD"
 
     def test_renders_template_in_replacement(self, stream_factory) -> None:
         t = WaybillTransformerRegex(
             pattern=r"^DEMO\| ", action="replace", replacement="{{ prefix }}: "
         )
-        s = stream_factory(name="DEMO| BBC One")
+        s = stream_factory(name="DEMO| NBS One")
         t.transform(s, variables={"prefix": "UK"})
-        assert s.name == "UK: BBC One"
+        assert s.name == "UK: NBS One"
 
     def test_renders_template_in_pattern(self, stream_factory) -> None:
         t = WaybillTransformerRegex(
             pattern=r"^{{ strip_prefix }}\| ", action="replace", replacement=""
         )
-        s = stream_factory(name="UK| BBC One")
+        s = stream_factory(name="UK| NBS One")
         t.transform(s, variables={"strip_prefix": "UK"})
-        assert s.name == "BBC One"
+        assert s.name == "NBS One"
 
     def test_undefined_template_variable_raises(self, stream_factory) -> None:
         t = WaybillTransformerRegex(
             pattern=r"^{{ missing }}\| ", action="replace", replacement=""
         )
-        s = stream_factory(name="UK| BBC One")
+        s = stream_factory(name="UK| NBS One")
         with pytest.raises(ValueError, match="Undefined template variable"):
             t.transform(s, variables={})
 

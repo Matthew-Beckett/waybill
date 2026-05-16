@@ -113,16 +113,16 @@ class TestMutableVariable:
                     "ch_name": {"value": "Default", "mutable": True},
                     "quality": {"value": "", "mutable": True},
                 },
-                "UK| Arsenal HD",
+                "UK| Northgate HD",
                 "{{ ch_name }} ({{ quality }})",
-                "Arsenal (HD)",
+                "Northgate (HD)",
             ),
             # Shorthand scalar notation (mutable=True by default) — capture replaces it
             (
                 {"ch_name": "Fallback"},
-                "UK| Chelsea SD",
+                "UK| Riverside SD",
                 "{{ ch_name }}",
-                "Chelsea",
+                "Riverside",
             ),
         ],
         ids=["explicit_mutable_true", "shorthand_scalar"],
@@ -157,7 +157,7 @@ class TestImmutableVariable:
     def test_immutable_variable_raises_on_capture_collision(
         self, member_variables, inherited_variables
     ) -> None:
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports Factory",
             matchers=[
@@ -178,7 +178,7 @@ class TestImmutableVariable:
 
     def test_immutable_variable_not_captured_does_not_raise(self) -> None:
         """An immutable variable is fine as long as no capture group shares its name."""
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports Factory",
             matchers=[
@@ -202,11 +202,11 @@ class TestImmutableVariable:
             },
         )
         plan = MemberPipeline(member).process()
-        assert plan.channels[0].name == "Arena: Arsenal"
+        assert plan.channels[0].name == "Arena: Northgate"
 
     def test_error_message_includes_member_name(self) -> None:
         """The error message must identify the member by name for diagnosability."""
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="My Named Member",
             matchers=[

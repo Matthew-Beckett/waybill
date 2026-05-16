@@ -82,12 +82,12 @@ class TestMemberPipelineValidatorScopes:
     def test_member_scope_count_counts_channels_not_streams(self) -> None:
         _set_streams(
             [
-                _stream(1, "BBC One"),
-                _stream(2, "BBC One"),
+                _stream(1, "NBS One"),
+                _stream(2, "NBS One"),
             ]
         )
         member = ConfigMember(
-            name="BBC One",
+            name="NBS One",
             validators=[
                 ConfigValidator(
                     type=ValidatorType.COUNT,
@@ -128,12 +128,12 @@ class TestMemberPipelineValidatorScopes:
     def test_channel_scope_count_still_counts_streams_per_channel(self) -> None:
         _set_streams(
             [
-                _stream(1, "BBC One"),
-                _stream(2, "BBC One"),
+                _stream(1, "NBS One"),
+                _stream(2, "NBS One"),
             ]
         )
         member = ConfigMember(
-            name="BBC One",
+            name="NBS One",
             validators=[
                 ConfigValidator(
                     type=ValidatorType.COUNT,

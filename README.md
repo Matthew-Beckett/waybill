@@ -94,7 +94,7 @@ All matchers share these common fields:
 - type: regex
   field: name
   action: keep
-  pattern: "^UK\\| BBC [1-9]( HD| HEVC)?$"
+  pattern: "^UK\\| NBS [1-9]( HD| HEVC)?$"
 ```
 
 | Field | Required | Description |
@@ -108,8 +108,8 @@ All matchers share these common fields:
   field: name
   action: keep
   prefixes:
-    - "UK| BBC ONE"
-    - "UK| BBC One"
+    - "UK| NBS ONE"
+    - "UK| NBS One"
 ```
 
 | Field | Required | Description |
@@ -123,7 +123,7 @@ All matchers share these common fields:
   field: name
   action: keep
   substrings:
-    - "TALK TV"
+    - "Globe Talk"
 ```
 
 | Field | Required | Description |
@@ -137,8 +137,8 @@ All matchers share these common fields:
   field: name
   action: keep
   values:
-    - "UK| BBC ONE HD"
-    - "UK| BBC ONE HEVC"
+    - "UK| NBS ONE HD"
+    - "UK| NBS ONE HEVC"
 ```
 
 | Field | Required | Description |
@@ -153,7 +153,7 @@ Any matcher can carry a `transformers` list. These **pre-transformers** mutate t
 - type: regex
   field: name
   action: keep
-  pattern: "^UK\\| BBC [1-4]( HD| HEVC)?$"
+  pattern: "^UK\\| NBS [1-4]( HD| HEVC)?$"
   transformers:
     - type: convertCardinalNumbers
       field: name
@@ -216,7 +216,7 @@ Transformers that target a single stream field (`regex`, `strip`, `set`, `conver
 ```yaml
 - type: set
   field: name
-  value: "BBC One"
+  value: "NBS One"
 ```
 
 | Field | Required | Description |
@@ -232,7 +232,7 @@ Sets one or more explicit metadata fields in a single transformer.
 
 ```yaml
 - type: setMetadata
-  name: "BBC One"
+  name: "NBS One"
   logoUrl: "https://example.com/logos/bbc-one.png"
   tvgId: "bbc.one.uk"
 ```
@@ -346,7 +346,7 @@ transformers, enabling a single member to produce many uniquely-named channels:
       value: "{{ ch_name }} ({{ quality }})"
 ```
 
-A stream named `UK| Arsenal HD` would produce a channel named `Arsenal (HD)`.
+A stream named `UK| Northgate HD` would produce a channel named `Northgate (HD)`.
 
 Captures are also recorded on each `StreamRecord` in the plan output for traceability.
 
@@ -415,7 +415,7 @@ Asserts that a field matches a regular expression after transformation. The defa
 - type: regexMatch
   scope: channel
   field: name
-  pattern: "^BBC [1-9]"
+  pattern: "^NBS [1-9]"
   action: fail
 ```
 

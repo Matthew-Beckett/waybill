@@ -130,8 +130,8 @@ class TestVariableScope:
         [
             # Variable defined at an outer scope (e.g. profile) is visible inside a member
             (
-                "BBC One",
-                r"^BBC",
+                "NBS One",
+                r"^NBS",
                 "{{ brand }} One",
                 {"brand": ConfigVariable(value="British")},
                 None,
@@ -148,22 +148,22 @@ class TestVariableScope:
             ),
             # Member-level variable shadows an inherited value with the same name
             (
-                "Sky One",
-                r"^Sky",
-                "{{ suffix }} Sky One",
+                "Arena One",
+                r"^Arena",
+                "{{ suffix }} Arena One",
                 {"suffix": ConfigVariable(value="[Global]")},
                 {"suffix": ConfigVariable(value="[Special]")},
-                "[Special] Sky One",
+                "[Special] Arena One",
             ),
             # Named capture group shadows a mutable predefined variable.
             # quality must also be declared so the capture reaches the template.
             (
-                "UK| Arsenal HD",
+                "UK| Northgate HD",
                 r"^UK\| (?P<ch_name>.+?) (?P<quality>HD|SD)$",
                 "{{ ch_name }} ({{ quality }})",
                 {"ch_name": ConfigVariable(value="Default", mutable=True)},
                 {"quality": ConfigVariable(value="", mutable=True)},
-                "Arsenal (HD)",
+                "Northgate (HD)",
             ),
         ],
         ids=[
@@ -194,7 +194,7 @@ class TestVariableScope:
 
     def test_captures_recorded_in_stream_record(self) -> None:
         """Named captures are stored on StreamRecord.captures for traceability."""
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         pipeline = _template_member(
             pattern=r"^UK\| (?P<ch_name>.+?) (?P<quality>HD|SD)$",
             template_value="{{ ch_name }} ({{ quality }})",
@@ -206,14 +206,14 @@ class TestVariableScope:
         plan = pipeline.process()
         assert len(plan.channels) == 1
         stream_record = plan.channels[0].streams[0]
-        assert stream_record.captures["ch_name"] == "Arsenal"
+        assert stream_record.captures["ch_name"] == "Northgate"
         assert stream_record.captures["quality"] == "HD"
 
     def test_predefined_variables_included_in_captures(self) -> None:
         """Predefined variables are also included in StreamRecord.captures."""
-        _set_streams(_StreamStub(pk=1, name="BBC One"))
+        _set_streams(_StreamStub(pk=1, name="NBS One"))
         pipeline = _template_member(
-            pattern=r"^BBC",
+            pattern=r"^NBS",
             template_value="{{ network }} One",
             inherited_variables={"network": ConfigVariable(value="British")},
         )
@@ -224,9 +224,9 @@ class TestVariableScope:
     def test_single_member_produces_multiple_channels(self) -> None:
         """A single member with named captures can produce many distinct channels."""
         _set_streams(
-            _StreamStub(pk=1, name="UK| Arsenal HD"),
-            _StreamStub(pk=2, name="UK| Chelsea SD"),
-            _StreamStub(pk=3, name="UK| Liverpool HD"),
+            _StreamStub(pk=1, name="UK| Northgate HD"),
+            _StreamStub(pk=2, name="UK| Riverside SD"),
+            _StreamStub(pk=3, name="UK| Hillcrest HD"),
         )
         pipeline = _template_member(
             pattern=r"^UK\| (?P<ch_name>.+?) (?P<quality>HD|SD)$",
@@ -238,14 +238,14 @@ class TestVariableScope:
         )
         plan = pipeline.process()
         channel_names = sorted(c.name for c in plan.channels)
-        assert channel_names == ["Arsenal (HD)", "Chelsea (SD)", "Liverpool (HD)"]
+        assert channel_names == ["Hillcrest (HD)", "Northgate (HD)", "Riverside (SD)"]
 
     def test_streams_with_same_template_output_merge_into_one_channel(self) -> None:
         """Streams whose template renders to the same value are grouped into a
         single channel."""
         _set_streams(
-            _StreamStub(pk=1, name="UK| Arsenal HD"),
-            _StreamStub(pk=2, name="UK| Arsenal HD"),
+            _StreamStub(pk=1, name="UK| Northgate HD"),
+            _StreamStub(pk=2, name="UK| Northgate HD"),
         )
         pipeline = _template_member(
             pattern=r"^UK\| (?P<ch_name>.+?) (?P<quality>HD|SD)$",

@@ -137,11 +137,11 @@ def _find_event(
 class TestInitEvents:
     def test_predefined_variables_emit_init_events(self) -> None:
         """Each predefined variable (from any scope) must produce an init event."""
-        _set_streams(_StreamStub(pk=1, name="BBC One"))
+        _set_streams(_StreamStub(pk=1, name="NBS One"))
         member = ConfigMember(
             name="Test",
-            matchers=[{"type": "regex", "field": "name", "pattern": r"^BBC"}],
-            transformers=[{"type": "set", "field": "name", "value": "BBC One"}],
+            matchers=[{"type": "regex", "field": "name", "pattern": r"^NBS"}],
+            transformers=[{"type": "set", "field": "name", "value": "NBS One"}],
             variables={"network": ConfigVariable(value="British", mutable=True)},
         )
         plan = MemberPipeline(member).process()
@@ -151,10 +151,10 @@ class TestInitEvents:
         assert "network" in names
 
     def test_init_event_value_is_predefined_value(self) -> None:
-        _set_streams(_StreamStub(pk=1, name="BBC One"))
+        _set_streams(_StreamStub(pk=1, name="NBS One"))
         member = ConfigMember(
             name="Test",
-            matchers=[{"type": "regex", "field": "name", "pattern": r"^BBC"}],
+            matchers=[{"type": "regex", "field": "name", "pattern": r"^NBS"}],
             transformers=[{"type": "set", "field": "name", "value": "static"}],
             variables={"brand": ConfigVariable(value="ArenaTV", mutable=True)},
         )
@@ -169,7 +169,7 @@ class TestInitEvents:
 class TestCaptureOverrideEvents:
     def test_declared_capture_emits_override_event(self) -> None:
         """A capture group that matches a declared variable emits capture_override."""
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports",
             matchers=[
@@ -191,11 +191,11 @@ class TestCaptureOverrideEvents:
         events = plan.channels[0].streams[0].variable_events
         ev = _find_event(events, "capture_override", "ch_name")
         assert ev is not None
-        assert ev.value == "Arsenal"
+        assert ev.value == "Northgate"
         assert ev.old_value == "Default"
 
     def test_override_event_source_identifies_matcher(self) -> None:
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports",
             matchers=[
@@ -223,7 +223,7 @@ class TestCaptureOverrideEvents:
 class TestCaptureDiscardedEvents:
     def test_undeclared_capture_emits_discarded_event(self) -> None:
         """A capture group not in any variables block emits capture_discarded."""
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports",
             matchers=[
@@ -247,7 +247,7 @@ class TestCaptureDiscardedEvents:
 
     def test_discarded_capture_not_in_stream_record_captures(self) -> None:
         """A discarded capture must NOT appear in StreamRecord.captures."""
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports",
             matchers=[
@@ -265,13 +265,13 @@ class TestCaptureDiscardedEvents:
         plan = MemberPipeline(member).process()
         captures = plan.channels[0].streams[0].captures
         assert "quality" not in captures
-        assert captures["ch_name"] == "Arsenal"
+        assert captures["ch_name"] == "Northgate"
 
 
 class TestTemplateReadEvents:
     def test_template_read_event_emitted_for_each_referenced_variable(self) -> None:
         """A template_read event must appear for each variable referenced in a transformer."""
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports",
             matchers=[
@@ -301,7 +301,7 @@ class TestTemplateReadEvents:
         assert "quality" in read_names
 
     def test_template_read_event_carries_resolved_value(self) -> None:
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports",
             matchers=[
@@ -323,10 +323,10 @@ class TestTemplateReadEvents:
         events = plan.channels[0].streams[0].variable_events
         ev = _find_event(events, "template_read", "ch_name")
         assert ev is not None
-        assert ev.value == "Arsenal"
+        assert ev.value == "Northgate"
 
     def test_template_read_event_source_identifies_transformer(self) -> None:
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports",
             matchers=[
@@ -352,7 +352,7 @@ class TestTemplateReadEvents:
 
     def test_no_template_read_events_for_non_template_transformer(self) -> None:
         """A set transformer with a literal (no template syntax) produces no read events."""
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports",
             matchers=[{"type": "regex", "field": "name", "pattern": r"^UK\|"}],
@@ -368,7 +368,7 @@ class TestTemplateReadEvents:
 class TestEventOrdering:
     def test_events_appear_in_pipeline_order(self) -> None:
         """Events must be ordered: init → capture events → template_read events."""
-        _set_streams(_StreamStub(pk=1, name="UK| Arsenal HD"))
+        _set_streams(_StreamStub(pk=1, name="UK| Northgate HD"))
         member = ConfigMember(
             name="Sports",
             matchers=[

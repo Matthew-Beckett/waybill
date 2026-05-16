@@ -74,7 +74,7 @@ class TestWaybillValidatorNonEmpty:
     @pytest.mark.parametrize(
         ("field", "stream_kwargs", "expected"),
         [
-            ("name", {"name": "BBC One"}, True),
+            ("name", {"name": "NBS One"}, True),
             ("name", {"name": ""}, False),
             ("tvg_id", {"tvg_id": "bbc.one"}, True),
             ("tvg_id", {"tvg_id": ""}, False),
@@ -107,7 +107,7 @@ class TestWaybillValidatorNonEmpty:
     @pytest.mark.parametrize(
         ("field", "channel_kwargs", "expected"),
         [
-            ("name", {"name": "BBC One"}, True),
+            ("name", {"name": "NBS One"}, True),
             ("name", {"name": ""}, False),
             ("tvg_id", {"epg_id": "bbc.one"}, True),
             ("tvg_id", {"epg_id": ""}, False),
@@ -141,8 +141,8 @@ class TestWaybillValidatorRegexMatch:
     @pytest.mark.parametrize(
         ("field", "pattern", "stream_kwargs", "expected"),
         [
-            ("name", r"^BBC", {"name": "BBC One"}, True),
-            ("name", r"^BBC", {"name": "ITV 1"}, False),
+            ("name", r"^NBS", {"name": "NBS One"}, True),
+            ("name", r"^NBS", {"name": "VTN 1"}, False),
             ("tvg_id", r"\.demo$", {"tvg_id": "bbc.demo"}, True),
             ("tvg_id", r"\.demo$", {"tvg_id": "bbc.live"}, False),
         ],
@@ -187,8 +187,8 @@ class TestWaybillValidatorRegexMatch:
     @pytest.mark.parametrize(
         ("field", "pattern", "channel_kwargs", "expected"),
         [
-            ("name", r"^BBC", {"name": "BBC One"}, True),
-            ("name", r"^BBC", {"name": "ITV 1"}, False),
+            ("name", r"^NBS", {"name": "NBS One"}, True),
+            ("name", r"^NBS", {"name": "VTN 1"}, False),
             ("tvg_id", r"\.demo$", {"epg_id": "bbc.demo"}, True),
             ("tvg_id", r"\.demo$", {"epg_id": "bbc.live"}, False),
         ],

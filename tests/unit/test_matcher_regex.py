@@ -11,20 +11,20 @@ class TestWaybillMatcherRegex:
     @pytest.mark.parametrize(
         "name, expected",
         [
-            ("BBC One", True),
-            ("ITV 1", False),
+            ("NBS One", True),
+            ("VTN 1", False),
         ],
     )
     def test_match_result(self, name, expected, stream_factory) -> None:
-        m = WaybillMatcherRegex(pattern=r"^BBC", field="name")
+        m = WaybillMatcherRegex(pattern=r"^NBS", field="name")
         assert m.match(stream_factory(name=name)) is expected
 
     @pytest.mark.parametrize(
         "pattern, case_sensitive, expected",
         [
-            (r"^bbc", False, True),  # insensitive → matches uppercase value
-            (r"^bbc", True, False),  # sensitive: lowercase pattern ≠ uppercase value
-            (r"^BBC", True, True),  # sensitive: exact case matches
+            (r"^nbs", False, True),  # insensitive → matches uppercase value
+            (r"^nbs", True, False),  # sensitive: lowercase pattern ≠ uppercase value
+            (r"^NBS", True, True),  # sensitive: exact case matches
         ],
     )
     def test_case_sensitivity(
@@ -33,12 +33,12 @@ class TestWaybillMatcherRegex:
         m = WaybillMatcherRegex(
             pattern=pattern, field="name", case_sensitive=case_sensitive
         )
-        assert m.match(stream_factory(name="BBC One")) is expected
+        assert m.match(stream_factory(name="NBS One")) is expected
 
     def test_drop_action_inverts_result(self, stream_factory) -> None:
-        m = WaybillMatcherRegex(pattern=r"^BBC", field="name", action="drop")
-        assert m.match(stream_factory(name="BBC One")) is False
-        assert m.match(stream_factory(name="ITV 1")) is True
+        m = WaybillMatcherRegex(pattern=r"^NBS", field="name", action="drop")
+        assert m.match(stream_factory(name="NBS One")) is False
+        assert m.match(stream_factory(name="VTN 1")) is True
 
     def test_matches_on_tvg_id_field(self, stream_factory) -> None:
         m = WaybillMatcherRegex(pattern=r".*\.demo$", field="tvg_id")
@@ -50,12 +50,12 @@ class TestWaybillMatcherRegex:
         assert m.match(stream_factory(name="Anything")) is True
 
     def test_describe_contains_field_and_pattern(self) -> None:
-        m = WaybillMatcherRegex(pattern=r"^BBC", field="name")
+        m = WaybillMatcherRegex(pattern=r"^NBS", field="name")
         assert "name" in m.describe()
-        assert "^BBC" in m.describe()
+        assert "^NBS" in m.describe()
 
     def test_describe_includes_drop_action(self) -> None:
-        m = WaybillMatcherRegex(pattern=r"^BBC", field="name", action="drop")
+        m = WaybillMatcherRegex(pattern=r"^NBS", field="name", action="drop")
         assert "drop" in m.describe()
 
 
@@ -66,13 +66,13 @@ class TestWaybillMatcherRegexCapture:
         m = WaybillMatcherRegex(
             pattern=r"^UK\| (?P<ch_name>.+?) (?P<quality>HD|SD)$", field="name"
         )
-        matched, captures = m.match_and_capture(stream_factory(name="UK| Arsenal HD"))
+        matched, captures = m.match_and_capture(stream_factory(name="UK| Northgate HD"))
         assert matched is True
-        assert captures == {"ch_name": "Arsenal", "quality": "HD"}
+        assert captures == {"ch_name": "Northgate", "quality": "HD"}
 
     def test_no_named_groups_returns_empty_dict(self, stream_factory) -> None:
         m = WaybillMatcherRegex(pattern=r"^UK\|", field="name")
-        matched, captures = m.match_and_capture(stream_factory(name="UK| BBC One"))
+        matched, captures = m.match_and_capture(stream_factory(name="UK| NBS One"))
         assert matched is True
         assert captures == {}
 
@@ -85,7 +85,7 @@ class TestWaybillMatcherRegexCapture:
     @pytest.mark.parametrize(
         "stream_name, expected_matched",
         [
-            ("UK| Arsenal HD", False),  # matches pattern → dropped
+            ("UK| Northgate HD", False),  # matches pattern → dropped
             ("US| ESPN", True),  # no match → kept, no captures
         ],
         ids=["match_drops", "no_match_keeps"],
@@ -104,20 +104,20 @@ class TestWaybillMatcherRegexCapture:
             field="name",
             case_sensitive=False,
         )
-        matched, captures = m.match_and_capture(stream_factory(name="UK| Arsenal HD"))
+        matched, captures = m.match_and_capture(stream_factory(name="UK| Northgate HD"))
         assert matched is True
-        assert captures["ch_name"] == "Arsenal"
+        assert captures["ch_name"] == "Northgate"
 
     def test_optional_group_absent_not_in_captures(self, stream_factory) -> None:
         """Named groups whose match is None (optional group absent) are excluded."""
         m = WaybillMatcherRegex(
             pattern=r"^(?P<ch_name>.+?)(?P<quality> HD)?$", field="name"
         )
-        matched, captures = m.match_and_capture(stream_factory(name="Arsenal"))
+        matched, captures = m.match_and_capture(stream_factory(name="Northgate"))
         assert matched is True
         # quality group matched nothing; absent from captures
         assert "quality" not in captures
-        assert captures["ch_name"] == "Arsenal"
+        assert captures["ch_name"] == "Northgate"
 
     @pytest.mark.parametrize(
         "pattern, expect_captures_annotation, expected_names",
@@ -146,11 +146,11 @@ class TestWaybillMatcherRegexCapture:
             pattern=r"^{{ provider }}\| (?P<ch_name>.+)$", field="name"
         )
         matched, captures = m.match_and_capture(
-            stream_factory(name="UK| Arsenal"),
+            stream_factory(name="UK| Northgate"),
             variables={"provider": "UK"},
         )
         assert matched is True
-        assert captures["ch_name"] == "Arsenal"
+        assert captures["ch_name"] == "Northgate"
 
     def test_template_in_pattern_no_match_when_variable_differs(
         self, stream_factory
@@ -159,7 +159,7 @@ class TestWaybillMatcherRegexCapture:
             pattern=r"^{{ provider }}\| (?P<ch_name>.+)$", field="name"
         )
         matched, _ = m.match_and_capture(
-            stream_factory(name="UK| Arsenal"),
+            stream_factory(name="UK| Northgate"),
             variables={"provider": "US"},
         )
         assert matched is False

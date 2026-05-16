@@ -11,11 +11,11 @@ class TestWaybillTransformerTemplate:
     @pytest.mark.parametrize(
         "template_str, variables, expected",
         [
-            ("{{ ch_name }}", {"ch_name": "Arsenal"}, "Arsenal"),
+            ("{{ ch_name }}", {"ch_name": "Northgate"}, "Northgate"),
             (
                 "{{ ch_name }} ({{ quality }})",
-                {"ch_name": "Arsenal", "quality": "HD"},
-                "Arsenal (HD)",
+                {"ch_name": "Northgate", "quality": "HD"},
+                "Northgate (HD)",
             ),
             ("Fixed Channel", {}, "Fixed Channel"),
         ],
@@ -62,7 +62,7 @@ class TestWaybillTransformerTemplate:
         t = WaybillTransformerTemplate(value="{{ ch_name }} ({{ quality }})")
         s1 = stream_factory(name="s1")
         s2 = stream_factory(name="s2")
-        t.transform(s1, variables={"ch_name": "Arsenal", "quality": "HD"})
-        t.transform(s2, variables={"ch_name": "Chelsea", "quality": "SD"})
-        assert s1.name == "Arsenal (HD)"
-        assert s2.name == "Chelsea (SD)"
+        t.transform(s1, variables={"ch_name": "Northgate", "quality": "HD"})
+        t.transform(s2, variables={"ch_name": "Riverside", "quality": "SD"})
+        assert s1.name == "Northgate (HD)"
+        assert s2.name == "Riverside (SD)"

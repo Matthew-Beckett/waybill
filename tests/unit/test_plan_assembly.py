@@ -28,8 +28,8 @@ from src.types.plan import (
 
 def _stream_record(
     id: int = 1,
-    original_name: str = "BBC One",
-    transformed_name: str = "BBC One",
+    original_name: str = "NBS One",
+    transformed_name: str = "NBS One",
     tvg_id: str | None = "bbc.one",
     logo_url: str | None = "https://example.com/logo.png",
 ) -> StreamRecord:
@@ -43,7 +43,7 @@ def _stream_record(
 
 
 def _violation(
-    action: str = "warn", scope: str = "stream", target: str = "BBC One"
+    action: str = "warn", scope: str = "stream", target: str = "NBS One"
 ) -> ValidatorViolation:
     return ValidatorViolation(
         validator_index=1,
@@ -94,7 +94,7 @@ class TestWaybillPlanHasFailures:
         assert plan.has_failures() is False
 
     def test_channel_scope_fail_also_detected(self) -> None:
-        violation = _violation(action="fail", scope="channel", target="BBC One")
+        violation = _violation(action="fail", scope="channel", target="NBS One")
         plan = self._plan(_member_plan([violation]))
         assert plan.has_failures() is True
 
@@ -111,7 +111,7 @@ class TestMemberPlanDroppedCount:
 
     def test_single_dropped_record(self) -> None:
         mp = MemberPlan(
-            member_name="test", dropped=[DroppedRecord(original_name="BBC One")]
+            member_name="test", dropped=[DroppedRecord(original_name="NBS One")]
         )
         assert mp.dropped_count == 1
 
@@ -165,10 +165,10 @@ class TestAssembleMemberPlan:
 
     def test_returns_member_plan(self) -> None:
         result = assemble_member_plan(
-            member_name="BBC",
-            matcher_descs=["regex: BBC"],
+            member_name="NBS",
+            matcher_descs=["regex: NBS"],
             transformer_descs=[],
-            raw_groups=self._raw_groups(["BBC One"]),
+            raw_groups=self._raw_groups(["NBS One"]),
             dropped=[],
             effective_stream_profile=None,
             effective_order_streams_by=None,
@@ -180,7 +180,7 @@ class TestAssembleMemberPlan:
             member_name="My Member",
             matcher_descs=[],
             transformer_descs=[],
-            raw_groups=self._raw_groups(["BBC One"]),
+            raw_groups=self._raw_groups(["NBS One"]),
             dropped=[],
             effective_stream_profile=None,
             effective_order_streams_by=None,
@@ -192,7 +192,7 @@ class TestAssembleMemberPlan:
             member_name="test",
             matcher_descs=[],
             transformer_descs=[],
-            raw_groups=self._raw_groups(["ITV 1", "BBC One", "Channel 4"]),
+            raw_groups=self._raw_groups(["VTN 1", "NBS One", "Apex TV"]),
             dropped=[],
             effective_stream_profile=None,
             effective_order_streams_by=None,
@@ -202,13 +202,13 @@ class TestAssembleMemberPlan:
 
     def test_epg_id_taken_from_most_common_tvg_id(self) -> None:
         raw_groups = {
-            "BBC One": [
+            "NBS One": [
                 (
                     None,
                     _stream_record(
                         id=1,
-                        original_name="BBC One",
-                        transformed_name="BBC One",
+                        original_name="NBS One",
+                        transformed_name="NBS One",
                         tvg_id="bbc.one",
                     ),
                 ),
@@ -216,8 +216,8 @@ class TestAssembleMemberPlan:
                     None,
                     _stream_record(
                         id=2,
-                        original_name="BBC One",
-                        transformed_name="BBC One",
+                        original_name="NBS One",
+                        transformed_name="NBS One",
                         tvg_id="bbc.one",
                     ),
                 ),
@@ -225,8 +225,8 @@ class TestAssembleMemberPlan:
                     None,
                     _stream_record(
                         id=3,
-                        original_name="BBC One",
-                        transformed_name="BBC One",
+                        original_name="NBS One",
+                        transformed_name="NBS One",
                         tvg_id="other.id",
                     ),
                 ),
@@ -247,13 +247,13 @@ class TestAssembleMemberPlan:
         logo_a = "https://example.com/a.png"
         logo_b = "https://example.com/b.png"
         raw_groups = {
-            "BBC One": [
+            "NBS One": [
                 (
                     None,
                     _stream_record(
                         id=1,
-                        original_name="BBC One",
-                        transformed_name="BBC One",
+                        original_name="NBS One",
+                        transformed_name="NBS One",
                         logo_url=logo_a,
                     ),
                 ),
@@ -261,8 +261,8 @@ class TestAssembleMemberPlan:
                     None,
                     _stream_record(
                         id=2,
-                        original_name="BBC One",
-                        transformed_name="BBC One",
+                        original_name="NBS One",
+                        transformed_name="NBS One",
                         logo_url=logo_a,
                     ),
                 ),
@@ -270,8 +270,8 @@ class TestAssembleMemberPlan:
                     None,
                     _stream_record(
                         id=3,
-                        original_name="BBC One",
-                        transformed_name="BBC One",
+                        original_name="NBS One",
+                        transformed_name="NBS One",
                         logo_url=logo_b,
                     ),
                 ),
@@ -293,7 +293,7 @@ class TestAssembleMemberPlan:
             member_name="test",
             matcher_descs=[],
             transformer_descs=[],
-            raw_groups=self._raw_groups(["BBC One"]),
+            raw_groups=self._raw_groups(["NBS One"]),
             dropped=[],
             effective_stream_profile="hd-only",
             effective_order_streams_by=None,
@@ -305,7 +305,7 @@ class TestAssembleMemberPlan:
             member_name="test",
             matcher_descs=[],
             transformer_descs=[],
-            raw_groups=self._raw_groups(["BBC One"]),
+            raw_groups=self._raw_groups(["NBS One"]),
             dropped=[],
             effective_stream_profile=None,
             effective_order_streams_by=OrderStreamsBy.QUALITY,
@@ -313,7 +313,7 @@ class TestAssembleMemberPlan:
         assert result.channels[0].order_streams_by is OrderStreamsBy.QUALITY
 
     def test_dropped_records_preserved(self) -> None:
-        dropped = [DroppedRecord(original_name="BBC One Dropped")]
+        dropped = [DroppedRecord(original_name="NBS One Dropped")]
         result = assemble_member_plan(
             member_name="test",
             matcher_descs=[],
@@ -328,14 +328,14 @@ class TestAssembleMemberPlan:
     def test_matcher_and_transformer_descs_preserved(self) -> None:
         result = assemble_member_plan(
             member_name="test",
-            matcher_descs=["regex: ^BBC"],
+            matcher_descs=["regex: ^NBS"],
             transformer_descs=["strip(prefix=UK: )"],
             raw_groups={},
             dropped=[],
             effective_stream_profile=None,
             effective_order_streams_by=None,
         )
-        assert result.matcher_descs == ["regex: ^BBC"]
+        assert result.matcher_descs == ["regex: ^NBS"]
         assert result.transformer_descs == ["strip(prefix=UK: )"]
 
 
@@ -378,17 +378,17 @@ class TestWaybillPlanFormatter:
 
     def test_quality_ordering_sorts_streams_by_resolution_descending(self) -> None:
         raw_groups = {
-            "BBC One": [
+            "NBS One": [
                 (
                     {"resolution": "1280x720", "video_bitrate": 2000.0},
                     _stream_record(
-                        id=1, original_name="BBC One", transformed_name="BBC One"
+                        id=1, original_name="NBS One", transformed_name="NBS One"
                     ),
                 ),
                 (
                     {"resolution": "1920x1080", "video_bitrate": 4500.0},
                     _stream_record(
-                        id=2, original_name="BBC One", transformed_name="BBC One"
+                        id=2, original_name="NBS One", transformed_name="NBS One"
                     ),
                 ),
             ]
@@ -408,11 +408,11 @@ class TestWaybillPlanFormatter:
 
     def test_quality_ordering_sets_order_reason_on_streams(self) -> None:
         raw_groups = {
-            "BBC One": [
+            "NBS One": [
                 (
                     {"resolution": "1920x1080", "video_bitrate": 4500.0},
                     _stream_record(
-                        id=1, original_name="BBC One", transformed_name="BBC One"
+                        id=1, original_name="NBS One", transformed_name="NBS One"
                     ),
                 ),
             ]
@@ -430,17 +430,17 @@ class TestWaybillPlanFormatter:
 
     def test_no_order_streams_by_preserves_insertion_order(self) -> None:
         raw_groups = {
-            "BBC One": [
+            "NBS One": [
                 (
                     None,
                     _stream_record(
-                        id=10, original_name="BBC One", transformed_name="BBC One"
+                        id=10, original_name="NBS One", transformed_name="NBS One"
                     ),
                 ),
                 (
                     None,
                     _stream_record(
-                        id=20, original_name="BBC One", transformed_name="BBC One"
+                        id=20, original_name="NBS One", transformed_name="NBS One"
                     ),
                 ),
             ]
@@ -471,13 +471,13 @@ class TestWaybillPlanFormatter:
 
     def test_channel_with_none_tvg_ids_has_none_epg_id(self) -> None:
         raw_groups = {
-            "BBC One": [
+            "NBS One": [
                 (
                     None,
                     _stream_record(
                         id=1,
-                        original_name="BBC One",
-                        transformed_name="BBC One",
+                        original_name="NBS One",
+                        transformed_name="NBS One",
                         tvg_id=None,
                     ),
                 ),
