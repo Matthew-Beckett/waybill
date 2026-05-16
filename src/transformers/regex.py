@@ -17,7 +17,9 @@ class WaybillTransformerRegex(WaybillTransformerBase):
         self.replacement = _BACKREF_PATTERN.sub(r"\\\1", replacement)
         self.field = field
 
-    def transform(self, stream: Stream) -> Stream | None:
+    def transform(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "Stream | None":
         match self.action:
             case "drop":
                 return (

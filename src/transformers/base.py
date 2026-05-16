@@ -10,7 +10,9 @@ class WaybillTransformerBase(ABC):
     """
 
     @abstractmethod
-    def transform(self, stream: Stream) -> Stream | None:
+    def transform(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "Stream | None":
         """Apply the transformation. Return None to drop the stream."""
 
     @abstractmethod

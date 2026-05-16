@@ -2329,37 +2329,41 @@ version = "1.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "dispatcharr" },
+    { name = "jinja2" },
 ]
 
 [package.dev-dependencies]
 bundle = [
     { name = "dacite" },
+    { name = "jinja2" },
+    { name = "markupsafe" },
     { name = "num2words" },
     { name = "pyyaml" },
     { name = "word2number" },
 ]
 dev = [
-    { name = "dacite" },
     { name = "pytest" },
     { name = "pytest-xdist", extra = ["psutil"] },
-    { name = "pyyaml" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "dispatcharr", git = "https://github.com/Dispatcharr/Dispatcharr?tag=v0.24.0" }]
+requires-dist = [
+    { name = "dispatcharr", git = "https://github.com/Dispatcharr/Dispatcharr?tag=v0.24.0" },
+    { name = "jinja2", specifier = ">=3.1.6" },
+]
 
 [package.metadata.requires-dev]
 bundle = [
     { name = "dacite", specifier = ">=1.9.2" },
+    { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "markupsafe", specifier = ">=3.0.3" },
     { name = "num2words", specifier = ">=0.5.13" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "word2number", specifier = ">=1.1" },
 ]
 dev = [
-    { name = "dacite", specifier = ">=1.9.2" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-xdist", extras = ["psutil"], specifier = ">=3.8.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]

@@ -10,7 +10,9 @@ class WaybillTransformerSet(WaybillTransformerBase):
         self.field = field
         self.value = value
 
-    def transform(self, stream: Stream) -> Stream | None:
+    def transform(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "Stream | None":
         setattr(stream, self.field, self.value)
         return stream
 

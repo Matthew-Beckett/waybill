@@ -19,7 +19,9 @@ class WaybillTransformerSetMetadata(WaybillTransformerBase):
         if not any((self.name, self.logo_url, self.tvg_id)):
             raise ValueError("setMetadata requires at least one metadata field")
 
-    def transform(self, stream: Stream) -> Stream | None:
+    def transform(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "Stream | None":
         if self.name:
             stream.name = self.name
         if self.logo_url:

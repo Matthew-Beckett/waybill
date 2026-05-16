@@ -1,0 +1,107 @@
+kind: WaybillConfig
+version: v1alpha1
+metadata:
+  name: template-transformer-example
+  description: >
+    Demonstrates named capture groups in regex matchers, the template
+      transformer, and scoped predefined variables.
+
+      A single member block can produce many distinct output channels by
+      extracting parts of the stream name at match time and using those values
+      in a Jinja2 template to construct the final channel name and metadata.
+
+      Variables follow lexical scope: profile → group → member.  Inner scopes
+      shadow outer ones.  Predefined variables can be marked mutable (default) or
+
+spec:
+  profiles:
+
+    # Variables defined here are inherited by all groups and members unless
+    # shadowed at a lower level.
+    sports:
+      name: Sports
+      streamProfile: Proxy
+      variables:
+        # Immutable: no capture group may override this branding prefix.
+        brand:
+          value: "Arena"
+          mutable: false
+        # Mutable: a capture group called "quality_suffix" may override this.
+        quality_suffix:
+          value: ""
+          mutable: true
+
+      groups:
+
+        uk_sports:
+          name: UK Sports
+          variables:
+            # Shadow the profile's quality_suffix at group level.
+            quality_suffix:
+              value: " (Live)"
+              mutable: true
+          members:
+
+
+            - name: Sports Factory
+              matchers:
+                - type: regex
+                  field: name
+                  # Named groups: ch_name and quality are extracted here and
+                  # become available to all transformers for this stream.
+                  pattern: "^UK\\| (?P<ch_name>.+?) (?P<quality>HD|SD|UHD)$"
+
+              transformers:
+                # Use ch_name and quality captures to build the channel name.
+                - type: template
+                  field: name
+                  value: "{{ ch_name }} ({{ quality }})"
+
+                # Write a deterministic tvg_id from the captured channel name.
+                - type: template
+                  field: tvg_id
+                  value: "sports.{{ ch_name }}"
+
+            - name: Regional Sports
+              # Member-level variable; shadows the group-level quality_suffix.
+              variables:
+                quality_suffix:
+                  value: " [Regional]"
+                  mutable: true
+
+              matchers:
+                - type: regex
+                  field: name
+                  pattern: "^REGION\\| (?P<ch_name>.+?) (?P<quality>HD|SD)$"
+                  # Pre-transformer runs before the regex pattern is tested.
+                  transformers:
+                    - type: strip
+                      field: name
+                      prefix: "    "   # strip leading spaces if present
+
+              transformers:
+                - type: template
+                  field: name
+                  value: "{{ ch_name }}{{ quality_suffix }}"
+
+                - type: template
+                  field: tvg_id
+                  value: "regional.{{ ch_name }}"
+
+        # Inherits brand="Arena" (immutable) from the profile.
+        # Does NOT shadow quality_suffix, so it falls back to the profile default of "".
+        premium_sports:
+          name: Premium Sports
+          members:
+
+            - name: Premium Channels
+              matchers:
+                - type: regex
+                  field: name
+                  pattern: "^PREMIUM\\| (?P<ch_name>.+)$"
+
+              transformers:
+                # brand comes from the profile-level predefined variable (immutable).
+                - type: template
+                  field: name
+                  value: "{{ brand }}: {{ ch_name }}"

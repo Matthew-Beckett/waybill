@@ -4,6 +4,7 @@ from .regex import WaybillTransformerRegex
 from .set import WaybillTransformerSet
 from .set_metadata import WaybillTransformerSetMetadata
 from .strip import WaybillTransformerStrip
+from .template import WaybillTransformerTemplate
 
 AnyTransformer = (
     WaybillTransformerRegex
@@ -11,6 +12,7 @@ AnyTransformer = (
     | WaybillTransformerStrip
     | WaybillTransformerSet
     | WaybillTransformerSetMetadata
+    | WaybillTransformerTemplate
 )
 
 
@@ -49,5 +51,8 @@ def build_transformer(cfg: ConfigTransformer) -> AnyTransformer:
             logo_url=cfg.logo_url,
             tvg_id=cfg.tvg_id,
         )
+
+    if cfg.type == TransformerType.TEMPLATE:
+        return WaybillTransformerTemplate(value=cfg.value, field=cfg.field)
 
     raise ValueError(f"Unknown transformer type: {cfg.type!r}")

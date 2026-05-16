@@ -169,7 +169,9 @@ class WaybillTransformerConvertCardinalNumbers(WaybillTransformerBase):
         except ValueError:
             return num
 
-    def transform(self, stream: Stream) -> Stream | None:
+    def transform(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "Stream | None":
         value = getattr(stream, self.field)
         match self.output_type:
             case "number":

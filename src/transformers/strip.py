@@ -11,7 +11,9 @@ class WaybillTransformerStrip(WaybillTransformerBase):
         self.prefix = prefix
         self.suffix = suffix
 
-    def transform(self, stream: Stream) -> Stream | None:
+    def transform(
+        self, stream: Stream, variables: "dict[str, str] | None" = None
+    ) -> "Stream | None":
         value = getattr(stream, self.field)
         if self.prefix and value.startswith(self.prefix):
             value = value[len(self.prefix) :]

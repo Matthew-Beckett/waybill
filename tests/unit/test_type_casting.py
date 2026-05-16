@@ -26,8 +26,10 @@ from src.types.config import (
     ValidatorOperator,
     ValidatorScope,
     ValidatorType,
+    ConfigVariable,
     _to_transformer,
     _to_validator,
+    _to_variable_dict,
 )
 
 
@@ -592,3 +594,69 @@ class TestConfigMatcherPostInit:
     def test_empty_transformers_list(self) -> None:
         matcher = ConfigMatcher(type=MatcherType.REGEX, pattern=r".*")
         assert matcher.transformers == []
+
+
+class TestToVariableDict:
+    def test_passthrough_config_variable_instance(self) -> None:
+        var = ConfigVariable(value="Arena", mutable=False)
+        result = _to_variable_dict({"brand": var})
+        assert result["brand"] is var
+
+    def test_dict_with_value_and_mutable(self) -> None:
+        result = _to_variable_dict({"brand": {"value": "Arena", "mutable": False}})
+        assert result["brand"].value == "Arena"
+        assert result["brand"].mutable is False
+
+    def test_dict_with_value_only_defaults_mutable_true(self) -> None:
+        result = _to_variable_dict({"suffix": {"value": " HD"}})
+        assert result["suffix"].value == " HD"
+        assert result["suffix"].mutable is True
+
+    def test_scalar_shorthand_creates_mutable_variable(self) -> None:
+        result = _to_variable_dict({"network": "BBC"})
+        assert result["network"].value == "BBC"
+        assert result["network"].mutable is True
+
+    def test_empty_dict_returns_empty(self) -> None:
+        result = _to_variable_dict({})
+        assert result == {}
+
+    def test_non_dict_input_returns_empty(self) -> None:
+        assert _to_variable_dict(None) == {}  # type: ignore[arg-type]
+        assert _to_variable_dict("string") == {}  # type: ignore[arg-type]
+        assert _to_variable_dict(42) == {}  # type: ignore[arg-type]
+
+    def test_multiple_variables(self) -> None:
+        result = _to_variable_dict(
+            {"brand": "Arena", "quality": {"value": "HD", "mutable": False}}
+        )
+        assert result["brand"].value == "Arena"
+        assert result["brand"].mutable is True
+        assert result["quality"].value == "HD"
+        assert result["quality"].mutable is False
+
+
+class TestConfigMemberVariablesCoercion:
+    def test_scalar_variables_coerced(self) -> None:
+        member = ConfigMember(
+            name="test",
+            variables={"brand": "Arena"},
+        )
+        assert isinstance(member.variables["brand"], ConfigVariable)
+        assert member.variables["brand"].value == "Arena"
+
+    def test_dict_variables_coerced(self) -> None:
+        member = ConfigMember(
+            name="test",
+            variables={"network": {"value": "BBC", "mutable": False}},
+        )
+        assert member.variables["network"].mutable is False
+
+    def test_existing_config_variable_passthrough(self) -> None:
+        var = ConfigVariable(value="Sky", mutable=True)
+        member = ConfigMember(name="test", variables={"brand": var})
+        assert member.variables["brand"] is var
+
+    def test_empty_variables_default(self) -> None:
+        member = ConfigMember(name="test")
+        assert member.variables == {}

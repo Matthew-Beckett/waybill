@@ -41,6 +41,10 @@ def _empty_violations() -> list["ValidatorViolation"]:
     return []
 
 
+def _empty_captures_dict() -> dict[str, str]:
+    return {}
+
+
 @dataclass(frozen=True)
 class TransformStep:
     """Records the effect of a single transformer step on a stream name."""
@@ -78,6 +82,7 @@ class StreamRecord:
     tvg_id: str | None = None
     logo_url: str | None = None
     order_reason: str | None = None
+    captures: dict[str, str] = field(default_factory=_empty_captures_dict)
     steps: list[TransformStep] = field(default_factory=_empty_transform_steps)
 
 
