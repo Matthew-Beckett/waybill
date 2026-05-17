@@ -4,5 +4,11 @@ test:
 deps:
 	uv sync --group dev --group bundle
 
-build: deps test
+schemas:
+	uv run generate_schema.py
+
+build: deps check schemas test
 	uv build --wheel
+
+check:
+	pre-commit run --all-files

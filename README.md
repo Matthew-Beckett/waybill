@@ -1,6 +1,6 @@
 # Waybill
 
-A [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) plugin for managing channel configurations declaratively. You define a YAML manifest describing which streams to keep and how to name them; Waybill plans and applies those changes to Dispatcharr for you.
+A [Dispatcharr](https://github.com/Dispatcharr/Dispatcharr) plugin for managing channel configurations declaratively. You define a YAML manifest describing which streams to keep and how to name them. Waybill plans and applies those changes to Dispatcharr for you.
 
 ## Overview
 
@@ -11,21 +11,29 @@ Waybill reads a **WaybillConfig** manifest and produces a reconciled channel lis
 
 Channels are selected from Dispatcharr's stream catalogue using **matchers**, renamed / normalised using **transformers**, and then checked against **validators** to assert expected conditions. Stream profiles and predefined **variables** are both resolved through a three-level inheritance hierarchy: profile → group → member, with inner scopes shadowing outer ones.
 
-## Motivation
+## Theory behind Waybill
 
-Some time before Dispatcharr's release, I was working on what is effectively Dispatcharr but with a much smaller scope. It would simply filter M3Us based on a pipeline to be sent to Threadfin. This was suboptimal, Threadfin was excessively memory intensive and I abandoned the project.
+Waybill is the culmination of my attempt to learn and apply computation theory in practice. It is not a theorem prover or a research artefact, but a lot of its execution model maps naturally onto formal-language and automata concepts.
 
-When Dispatcharr came along, and I saw there was a plugin system. I decided that the pipeline filtering aspect of my M3U filter API could probably be ported to Dispatcharr to allow for fully declerative channel configuration where you describe the semantics of your upstream M3U or XC playlist as YAML.
+At its core, Waybill is a small declarative language which happens to be encoded as YAML. A valid manifest is a well-formed sentence in that language, and the schema plus type layer define its grammar and which terms are admissible.
 
-Inspired by Kubernetes YAML declaration patterns with a hint of Terraform's plan and apply functionality my goal for Waybill was to improve upon existing Dispatcharr plugins to give complete and total control to the user to define their channel layouts.
+The configuration format is of particular intellectual interest to me as a Platform Engineer because a lot of my day-to-day work involves making informed decisions about schema design, especially in Kubernetes.
 
-Waybill provides no mechanism for fragile matchers or transformers such as those which perform token splitting, or attempt to dynamically infer quality tags, regions, or other semantics encapsulated within names. Fuzzy search from patterns is powered by regex on a scope as limited or extensive as you like. It makes no assumptions about your stream list, you describe to Waybill how your stream list is named and it handles the rest.
+Parsing determines whether the input belongs to the language, and evaluation assigns meaning to that sentence by constructing a pipeline.
 
-### AI Disclosure
+The matcher stage was inspired by finite-state automata theory, but it diverges significantly in real-world use. Each member defines a recogniser over a projected view of a stream record, usually a field such as `name` or `tvg_id`. `exactMatch`, `hasPrefix`, `containsAny`, and especially `regex` correspond to recognisers for regular properties over strings. In operational terms the member accepts a stream if all of its matcher predicates accept after any local pre-transformers have normalised the input. This is close to a textbook FSA-style acceptance pipeline, except that the effective "alphabet" is not raw characters but a finite catalogue of `Stream` records whose fields are inspected selectively.
 
-There is some Clanker output in this repository, mainly examples, documentation, unit tests and the tooling for generating the config JSON Schema. These seemed like parts there's be zero value in me writing myself.
+During my research I also took heavy inspiration from the Mealy machine. In a classical Mealy machine, output is produced on transitions as a function of current state and input symbol. Waybill behaves similarly because a stream moves through a deterministic sequence of transformations and emits rewritten metadata as it advances. Regex replacement, strip, set, cardinal-number conversion, and Jinja templating are all transition-like output functions.
 
-However, almost all of the rest of the code is written by me, by hand, and then reviewed by Clankers. The config spec was designed by a human and it's interface was built with humans in mind.
+The next representation of the stream is determined by the current working value plus the current environment. The implementation even records each transition as a transformation step, which makes the transduction explicit in the plan output.
+
+The important nuance is that Waybill is not a textbook Mealy machine. Its state is richer than finite control alone. Regex matchers can dynamically bind named capture groups, predefined variables are scoped and inherited lexically from profile to group to member, and optional mutability constrains accidental rebinding or shadowing. Captures are accumulated during matching, but only names declared in a `variables` block are forwarded into the main transformer scope.
+
+That means the effective machine state includes a scoped environment as well as the current transformed stream value. For you CS nerds, it is better described as a deterministic finite-state transducer with an auxiliary environment, or an extended finite-state machine, than as a minimal Mealy automaton.
+
+It looks like a finite-state automaton when it filters streams, it looks like a Mealy machine when it rewrites them, and it stops being either in the strict textbook sense once aggregation, scoped bindings, validation, and database reconciliation are introduced for the real-world task of channel management and pursuit of a tolerable user experience.
+
+If you're interested in reading more about the theoretical concepts applied in Waybill, read about regular-language recognition, deterministic transduction, lexical environments, finite-state automata theory, and predicate checking.
 
 ## Manifest structure
 
@@ -488,7 +496,7 @@ The resulting `.zip` file in `dist/` can be uploaded directly through the Dispat
 
 ```sh
 # Install dependencies
-uv sync
+make deps
 
 # Regenerate the JSON Schema from the Python type definitions
 uv run generate_schema.py
